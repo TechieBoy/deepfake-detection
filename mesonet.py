@@ -198,13 +198,16 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
+def run():
+    model = MesoInception4(2)
+    model = model.to(device)
+    criterion = nn.CrossEntropyLoss()
 
-model = MesoInception4(2)
-model = model.to(device)
-criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    model = train_model(model, criterion, optimizer, scheduler, 50)
 
-optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
-model = train_model(model, criterion, optimizer, scheduler, 50)
+    torch.save(model.state_dict(), "meso.pt")
 
-torch.save(model.state_dict(), "meso.pt")
+if __name__ == '__main__':
+    print(image_datasets['train'].class_to_idx)

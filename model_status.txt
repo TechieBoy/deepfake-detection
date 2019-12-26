@@ -1,0 +1,2 @@
+resnet101 - 0.95 val best epch 22
+mesonet - 0.88 val best epoch 31

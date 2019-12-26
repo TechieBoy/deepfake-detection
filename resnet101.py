@@ -132,16 +132,19 @@ def get_model():
     model_v1 = model_v1.to(device)
     return model_v1
 
+def run():
+    criterion = nn.CrossEntropyLoss()
+    model_v1 = get_model()
+    optimizer = optim.SGD(model_v1.parameters(), lr=0.001, momentum=0.9)
 
-criterion = nn.CrossEntropyLoss()
-model_v1 = get_model()
-optimizer = optim.SGD(model_v1.parameters(), lr=0.001, momentum=0.9)
+    # exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
+    exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, "min", factor=0.1, verbose=True
+    )
 
-# exp_lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
-exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, "min", factor=0.1, verbose=True
-)
+    model_v1 = train_model(model_v1, criterion, optimizer, exp_lr_scheduler, 25)
 
-model_v1 = train_model(model_v1, criterion, optimizer, exp_lr_scheduler, 25)
+    torch.save(model_v1.state_dict(), "resnet101.pt")
 
-torch.save(model_v1.state_dict(), "resnet101.pt")
+if __name__ == '__main__':
+    print(image_datasets['train'].class_to_idx)
