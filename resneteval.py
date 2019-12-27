@@ -7,14 +7,13 @@ import cv2
 import os
 from torchvision import models, transforms
 from glob import glob
-import multiprocessing as mp
+import csv
 
 data_transform = transforms.Compose(
     [
         transforms.ToPILImage(),
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
-        # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ]
 )
@@ -54,7 +53,8 @@ def find_max_face(input_image):
             y_bot = min(endY + 15, height)
             x_bot = min(endX + 15, width)
 
-            return input_image[y_top:y_bot, x_top:x_bot]
+            fimg = input_image[y_top:y_bot, x_top:x_bot]
+            return fimg
     return None
 
 
@@ -67,14 +67,14 @@ def get_frame(video_path, per_n):
             ret, frame = capture.retrieve()
             # Get face from video
             a = find_max_face(frame)
-            if a is not None:
+            if a is not None and len(a) > 0:
                 capture.release()
                 return a
+    capture.release()
     return None
 
 
-
-def resnet_eval(model, video_path, video_name, q):
+def resnet_eval(model, video_path):
 
     # Load video
     a = None
@@ -82,6 +82,8 @@ def resnet_eval(model, video_path, video_name, q):
     sol = 0
     while a is None and per_n > 0:
         per_n = per_n // 2
+        if per_n == 0:
+            break
         a = get_frame(video_path, per_n)
     if a is None:
         # Could not find face return 0.5
@@ -99,51 +101,30 @@ def resnet_eval(model, video_path, video_name, q):
         #     'real' : 1
         # }
         sol = softmax(outputs)[0]
-    result = video_name + "," + str(sol)
-    q.put(result)
-    return result
-
-
-def listener(q):
-    '''listens for messages on the q, writes to file. '''
-    with open('submission.csv', 'w') as f:
-        while True:
-            m = q.get()
-            if m == 'kill':
-                print("Done")
-                break
-            f.write(str(m) + os.linesep)
-            f.flush()
+    return sol
 
 
 if __name__ == '__main__':
-    with open('submission.csv', 'w') as f:
-        f.write('filename,label' + os.linesep)
-    
     device = torch.device("cuda:0")
     # Load model
     model = get_model()
+    model.to(torch.device('cpu'))
     model.load_state_dict(torch.load('saved_models/resnet101.pt'))
     # Eval mode
     model.eval()
 
-    files = glob('files/*')
-    manager = mp.Manager()
-    q = manager.Queue()
-    pool = mp.Pool(mp.cpu_count(0 + 2))
-    watcher = pool.apply_async(listener, (q,))
-    jobs = []
+    fd = {}
+
+    files = glob('../kaggle/test_videos/*')
     for fil in files:
         video_name = fil.split('/')[-1]
-        job = pool.apply_async(resnet_eval, (model, fil, video_name, q))
-        jobs.append(job)
-    
-    for job in jobs:
-        job.get()
-    
-    q.put('kill')
-    pool.close()
-    pool.join()
-
-    resnet_eval('/home/teh_devs/deepfake/raw/dfdc_train_part_1/hkgldamgcb.mp4')
+        if video_name != 'metadata.json':
+            sol = resnet_eval(model, fil)
+            fd[video_name] = sol
+    with open('submission.csv', 'w', newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(['filename', 'label'])
+        for key, value in fd.items():
+            writer.writerow([key, value])
+    # resnet_eval('/home/teh_devs/deepfake/raw/dfdc_train_part_1/hkgldamgcb.mp4')
 

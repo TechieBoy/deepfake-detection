@@ -131,6 +131,10 @@ dmypy.json
 # vscode
 .vscode/
 
-# saved models
+# saved models and other data
+head_pose/o/
+head_pose/dlib-models/
+head_pose/sample_images/
+head_pose/feat/
 saved_models/
 *.pt
