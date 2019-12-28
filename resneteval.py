@@ -27,7 +27,6 @@ def get_model():
     num_last_layer = model_v1.fc.in_features
     model_v1.fc = nn.Linear(num_last_layer, 2)
 
-    model_v1 = model_v1.to(device)
     return model_v1
 
 
