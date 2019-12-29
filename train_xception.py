@@ -18,8 +18,8 @@ data_transform = transforms.Compose(
 data_dir = "../dataset/train/"
 
 num_workers = 35
-train_batch_size = 128
-test_batch_size = 128
+train_batch_size = 488
+test_batch_size = 488
 img_dataset = datasets.ImageFolder(data_dir, data_transform)
 
 dataset_size = len(img_dataset)
