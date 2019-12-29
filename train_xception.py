@@ -11,8 +11,6 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 
 
-# GPU
-
 data_transform = transforms.Compose(
     [transforms.Resize((299, 299)), transforms.ToTensor(), transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]
 )
@@ -50,13 +48,9 @@ weights = make_weights_for_balanced_classes(img_dataset.imgs, train_indices, len
 weights = torch.DoubleTensor(weights)
 sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
 
-train_loader = DataLoader(
-    train_dataset, sampler=sampler, num_workers=num_workers, batch_size=train_batch_size, pin_memory=True
-)
+train_loader = DataLoader(train_dataset, sampler=sampler, num_workers=num_workers, batch_size=train_batch_size, pin_memory=True)
 
-test_loader = DataLoader(
-    test_dataset, shuffle=False, num_workers=num_workers, batch_size=test_batch_size, pin_memory=True
-)
+test_loader = DataLoader(test_dataset, shuffle=False, num_workers=num_workers, batch_size=test_batch_size, pin_memory=True)
 
 
 dataloaders = {"train": train_loader, "test": test_loader}
@@ -143,13 +137,14 @@ def run():
         cudnn.benchmark = True
         cudnn.deterministic = True
 
-    if torch.cuda.device_count() > 1:
-        print("Using", torch.cuda.device_count(), "GPUs!")
-        model = nn.DataParallel(model)
-
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.005)
+    if torch.cuda.device_count() > 1:
+        print("Using", torch.cuda.device_count(), "GPUs!")
+        torch.distributed.init_process_group(backend="nccl")
+        model = nn.parallel.DistributedDataParallel(model)
+
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
     exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, "min", factor=0.5, verbose=True)
 
     model_v1 = train_model(model, device, criterion, optimizer, exp_lr_scheduler, 25)
@@ -159,3 +154,15 @@ def run():
 
 if __name__ == "__main__":
     print(img_dataset.class_to_idx)
+    run()
+    # To load distributed dataparallel back to normal
+    # state_dict = torch.load('/kaggle/input/resnet101-meso-trained-26dec-deepfake/xception_epoch_2.pt', map_location=torch.device('cpu') )
+
+    # # create new OrderedDict that does not contain `module.`
+    # from collections import OrderedDict
+    # new_state_dict = OrderedDict()
+    # for k, v in state_dict.items():
+    #     name = k[7:] # remove `module.`
+    #     new_state_dict[name] = v
+    # # load params
+    # model.load_state_dict(new_state_dict)
