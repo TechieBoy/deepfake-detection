@@ -1,13 +1,15 @@
-import warnings
-
-warnings.simplefilter(action="ignore", category=FutureWarning)
-import cvlib as cv
 from glob import glob
 import os
 import cv2
 from concurrent.futures import ProcessPoolExecutor
 from time import time
-
+import torch
+from facenet_pytorch import MTCNN
+from tqdm import tqdm
+from PIL import Image
+import pandas as pd
+from torchvision.utils import save_image
+import numpy as np
 folder_list = glob("../raw/*")
 
 
@@ -127,11 +129,87 @@ def create_frames(executor):
                 # convert_video_to_face_frames_periodic(video_folder, input_path, output_folder, 800)
 
 
+def convert_video_to_frames_per_frame(input_path, per_n):
+    capture = cv2.VideoCapture(input_path)
+    num_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    frames = []
+    for i in range(0, num_frames):
+        ret = capture.grab()
+        if i % per_n == 0:
+            ret, frame = capture.retrieve()
+            if ret:
+                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                height, width, channels = image.shape
+                image = cv2.resize(image, (width // 2, height // 2), interpolation=cv2.INTER_AREA)
+                frames.append(frame)
+    capture.release()
+    return frames
+
+
+def load_model():
+    device = torch.device("cuda:0")
+    detector = MTCNN(image_size=300, margin=30, device=device, post_process=False)
+    return detector
+
+
+def detect_faces_mtcnn_and_save(detector, base_folder, base_video, frames):
+    pil_images = [Image.fromarray(frame) for frame in frames]
+    filenames = [os.path.join(base_folder, f'{base_video}_face_{i}.jpg') for i, _ in enumerate(pil_images)]
+    faces = detector(pil_images, filenames)
+    return faces
+
+
+def convert_video_to_frames_with_mtcnn(detector, base_folder, folder):
+    print(folder)
+    for video in tqdm(os.listdir(folder)):
+        if video != "metadata.json" and video != "frames" and video != "audio":
+            frames = convert_video_to_frames_per_frame(os.path.join(folder, video), 10)
+            base_video = video.split('.')[0]
+            detect_faces_mtcnn_and_save(detector, base_folder, base_video, frames)
+            # for i, face in enumerate(faces):
+            #     if type(face) == torch.Tensor:
+            #         filename = os.path.join(base_folder, f'{base_video}_face_{i}.jpg')
+            #         save_image(face, filename)
+
+
+def convert_with_mtcnn_parallel(detector, base_folder, folder):
+    print(folder)
+
+    def func(video):
+        return convert_video_to_frames_per_frame(os.path.join(folder, video), 10)
+
+    video_list = os.listdir(folder)
+    video_list.remove('metadata.json')
+    video_list.remove('frames')
+    video_list.remove('audio')
+    with ProcessPoolExecutor(20) as pool:
+        frame_list = pool.map(func, video_list, chunksize=1)
+    for video, frames in zip(video_list, frame_list):
+        base_video = video.split('.')[0]
+        detect_faces_mtcnn_and_save(detector, base_folder, base_video, frames)
+        
+
 if __name__ == "__main__":
-    st = time()
-    with ProcessPoolExecutor() as executor:
-        create_frames(executor)
-    end = time()
-    print("Took time " + str((end - st) / 60) + " minutes ")
-    cv2.destroyAllWindows()
+    detector = load_model()
+    base_folder = '../dataset/new/'
+    for f in folder_list:
+        convert_video_to_frames_with_mtcnn(detector, base_folder, f)
+    # def multiconvert(folder):
+    #     if folder != '../raw/combined_metadata.csv':
+    #         return convert_video_to_frames_with_mtcnn(detector, base_folder, folder)
+
+    # for f in reversed(folder_list):
+    #     multiconvert(f)
+    # for f in folder_list[:1]:
+    #     convert_video_to_frames_with_mtcnn(base_folder, f)
+    # st = time()
+    # import functools
+    # ff = functools.partial(convert_video_to_frames_with_mtcnn, detector=None, base_folder=base_folder)
+    # print(ff)
+    # with ProcessPoolExecutor(50) as executor:
+    #     print("HERE")
+    #     executor.map(save_to_numpy, folder_list[1:])
+    # end = time()
+    # print("Took time " + str((end - st) / 60) + " minutes ")
+    # cv2.destroyAllWindows()
     # print(folder_list[:5])
