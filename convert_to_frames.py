@@ -200,11 +200,11 @@ if __name__ == "__main__":
     base_folder = "../dataset/new/"
 
     folder_list = []
-    for i in range(37, 50):
+    for i in range(50):
         folder_list.append(f"/home/teh_devs/deepfake/raw/dfdc_train_part_{i}")
 
     detector = load_model(device="cuda:0")
-    for f in folder_list[:10]:
+    for f in folder_list:
         convert_video_to_frames_with_mtcnn(detector, base_folder, f)
     if failed:
         with open(f"failed.pickle", "wb") as handle:

@@ -9,15 +9,26 @@ import os
 import copy
 
 
-def load_data_imagefolder(data_dir, data_transform, num_workers, train_batch_size, test_batch_size, seed, test_split_size):
+def load_data_imagefolder(
+    data_dir,
+    data_transform,
+    num_workers,
+    train_batch_size,
+    test_batch_size,
+    seed,
+    test_split_size,
+):
     np.random.seed(seed)
     torch.manual_seed(seed)
     img_dataset = datasets.ImageFolder(data_dir, data_transform)
-
+    print(img_dataset.class_to_idx)
     dataset_size = len(img_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
-        indices, random_state=seed, test_size=test_split_size, stratify=img_dataset.targets
+        indices,
+        random_state=seed,
+        test_size=test_split_size,
+        stratify=img_dataset.targets,
     )
 
     test_img_dataset = copy.deepcopy(img_dataset)
@@ -40,20 +51,32 @@ def load_data_imagefolder(data_dir, data_transform, num_workers, train_batch_siz
             weight[idx] = weight_per_class[images[val][1]]
         return weight
 
-    weights = make_weights_for_balanced_classes(img_dataset.imgs, train_indices, len(img_dataset.classes))
+    weights = make_weights_for_balanced_classes(
+        img_dataset.imgs, train_indices, len(img_dataset.classes)
+    )
     weights = torch.DoubleTensor(weights)
     sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
 
     train_loader = DataLoader(
-        train_dataset, sampler=sampler, num_workers=num_workers, batch_size=train_batch_size, pin_memory=True
+        train_dataset,
+        sampler=sampler,
+        num_workers=num_workers,
+        batch_size=train_batch_size,
+        pin_memory=True,
     )
 
-    test_loader = DataLoader(test_dataset, shuffle=False, num_workers=num_workers, batch_size=test_batch_size, pin_memory=True)
+    test_loader = DataLoader(
+        test_dataset,
+        shuffle=False,
+        num_workers=num_workers,
+        batch_size=test_batch_size,
+        pin_memory=True,
+    )
 
+    dataset_dict = {"train": train_dataset, "test": test_dataset}
     dataloaders = {"train": train_loader, "test": test_loader}
-    dataset_sizes = {"train": len(train_dataset), "test": len(test_dataset)}
 
-    return dataloaders, dataset_sizes
+    return dataset_dict, dataloaders
 
 
 def combine_metadata():
