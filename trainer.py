@@ -1,6 +1,5 @@
-import numpy as np
-import cv2
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import time
@@ -18,7 +17,9 @@ device = torch.device("cuda:0")
 classes = ["fake", "real"]
 
 
-def train_model(model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(
+    model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs=25
+):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -95,6 +96,11 @@ def train_model(model, datasets, dataloaders, criterion, optimizer, scheduler, n
         print("RoC AUC:")
         print(roc_auc_score(true_val, probabilites))
         print()
+        probabilites = np.around(probabilites, deciamls=1)
+        hist, _ = np.histogram(probabilites, bins=3)
+        print("# Predictions magnitude below 0.33", hist[0])
+        print("# Predictions magnitude 0.33 to 0.66", hist[1])
+        print("# Predictions magnitude above 0.66", hist[2])
 
     time_elapsed = time.time() - since
     print(
@@ -124,13 +130,17 @@ def run():
         seed=420,
         test_split_size=0.25,
     )
-    
+    print("Classes array (check order)")
+    print(classes)
+
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
 
     optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
-    model = train_model(model, datasets, dataloaders, criterion, optimizer, scheduler, 50)
+    model = train_model(
+        model, datasets, dataloaders, criterion, optimizer, scheduler, 50
+    )
 
     torch.save(model.state_dict(), "meso.pt")
 
