@@ -20,10 +20,13 @@ classes = ["fake", "real"]
 
 def load_multi_gpu(model):
     model.to(device)
+    print(torch.cuda.device_count())
     if torch.cuda.device_count() > 1:
         print("Using", torch.cuda.device_count(), "GPUs!")
-        torch.distributed.init_process_group(backend="nccl")
-        model = nn.parallel.DistributedDataParallel(model)
+        # torch.distributed.init_process_group(backend="nccl")
+        # model = nn.parallel.DistributedDataParallel(model)
+        model = nn.DataParallel(model)
+        return model
     else:
         raise AssertionError("Multiple GPU's not available")
 
@@ -87,7 +90,7 @@ def train_model(
 
             dataset_size = len(datasets[phase])
             epoch_loss = running_loss / dataset_size
-            epoch_acc = running_corrects.double() / dataset_size
+            epoch_acc = float(running_corrects) / dataset_size
 
             print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
 
@@ -111,7 +114,7 @@ def train_model(
         print("RoC AUC:")
         print(roc_auc_score(true_val, probabilites))
         print()
-        probabilites = np.around(probabilites, deciamls=1)
+        probabilites = np.around(probabilites, decimals=1)
         hist, _ = np.histogram(probabilites, bins=3)
         print("# Predictions magnitude below 0.33", hist[0])
         print("# Predictions magnitude 0.33 to 0.66", hist[1])
@@ -131,24 +134,25 @@ def train_model(
 
 
 # Define which transform to use here
-def load_image_dataset(image_size, mean, std):
+def load_image_dataset(image_size, mean, std, test_transform):
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
     return load_data_imagefolder(
-        data_dir="/data/deepfake",
-        data_transform=data_transform,
-        num_workers=10,
-        train_batch_size=10,
-        test_batch_size=500,
+        data_dir="/raid/deepfake/new",
+        train_data_transform=data_transform,
+        test_data_transform=test_transform,
+        num_workers=40,
+        train_batch_size=3200,
+        test_batch_size=3200,
         seed=420,
-        test_split_size=0.25,
+        test_split_size=0.20,
     )
 
 
 def pre_run():
     model = get_model(2)
     datasets, dataloaders = load_image_dataset(
-        model.get_image_size(), *(model.get_mean_std())
+        model.get_image_size(), *(model.get_mean_std()), model.get_test_transform()
     )
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -163,25 +167,26 @@ def pre_run():
 def run():
     model = get_model(2)
     datasets, dataloaders = load_image_dataset(
-        model.get_image_size(), *(model.get_mean_std())
+        model.get_image_size(), *(model.get_mean_std()), model.get_test_transform()
     )
 
     print("Classes array (check order)")
     print(classes)
 
     model = model.to(device)
+    model = load_multi_gpu(model)
     criterion = nn.CrossEntropyLoss()
 
     optimizer = optim.AdamW(
-        model.parameters, lr=0.1, betas=(0.95, 0.99), weight_decay=0.05
+        model.parameters(), lr=0.1, betas=(0.96, 0.99), weight_decay=0.05
     )
 
-    num_epochs = 50
+    num_epochs = 25
     # Have to call step every batch!!
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=0.01,
-        div_factor=10.0,  # initial_lr = max_lr/div_factor
+        div_factor=15.0,  # initial_lr = max_lr/div_factor
         final_div_factor=10000.0,  # min_lr = initial_lr/final_div_factor
         epochs=num_epochs,
         steps_per_epoch=len(dataloaders["train"]),
@@ -253,4 +258,4 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    pre_run()
+    run()

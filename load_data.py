@@ -11,7 +11,8 @@ import copy
 
 def load_data_imagefolder(
     data_dir,
-    data_transform,
+    train_data_transform,
+    test_data_transform,
     num_workers,
     train_batch_size,
     test_batch_size,
@@ -21,7 +22,7 @@ def load_data_imagefolder(
     print("Loading data")
     np.random.seed(seed)
     torch.manual_seed(seed)
-    img_dataset = datasets.ImageFolder(data_dir, data_transform)
+    img_dataset = datasets.ImageFolder(data_dir, train_data_transform)
     print(img_dataset.class_to_idx)
     dataset_size = len(img_dataset)
     indices = list(range(dataset_size))
@@ -33,8 +34,7 @@ def load_data_imagefolder(
     )
 
     test_img_dataset = copy.deepcopy(img_dataset)
-    test_img_dataset.transform = None
-    test_img_dataset.transforms = None
+    test_img_dataset.transform = test_data_transform
 
     train_dataset = Subset(img_dataset, train_indices)
     test_dataset = Subset(test_img_dataset, test_indices)
