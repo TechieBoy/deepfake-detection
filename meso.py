@@ -93,14 +93,21 @@ class MesoInception4(nn.Module):
 
         return x
 
+    def get_mean_std(self):
+        return ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+
+    def get_image_size(self):
+        return (256, 256)
+
+    def get_test_transform(self):
+        return transforms.Compose(
+            [
+                transforms.Resize((256, 256)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            ]
+        )
+
 
 def get_model(num_classes):
     return MesoInception4(num_classes=num_classes)
-
-
-def get_mean_std():
-    return ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-
-
-def get_image_size():
-    return (256, 256)

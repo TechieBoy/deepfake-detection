@@ -29,7 +29,7 @@ def move_frames(f):
                 copy_all_files_within(vidFramesFolder, dataset_folder_real)
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     folder_list = glob('../raw/*')
     # with ProcessPoolExecutor(max_workers=50) as executor:
     #     executor.map(move_frames, folder_list)
