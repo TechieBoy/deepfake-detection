@@ -18,19 +18,14 @@ device = torch.device("cuda:0")
 classes = ["fake", "real"]
 
 
-def load_device(model, use_multiple=True):
-    device = torch.device("cpu")
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-
+def load_multi_gpu(model):
     model.to(device)
-
-    if use_multiple:
-        if torch.cuda.device_count() > 1:
-            print("Using", torch.cuda.device_count(), "GPUs!")
-            torch.distributed.init_process_group(backend="nccl")
-            model = nn.parallel.DistributedDataParallel(model)
+    if torch.cuda.device_count() > 1:
+        print("Using", torch.cuda.device_count(), "GPUs!")
+        torch.distributed.init_process_group(backend="nccl")
+        model = nn.parallel.DistributedDataParallel(model)
+    else:
+        raise AssertionError("Multiple GPU's not available")
 
 
 def train_model(
@@ -112,6 +107,7 @@ def train_model(
         print(classification_report(true_val, predictions, target_names=classes))
         print("Confusion Matrix")
         print(confusion_matrix(true_val, predictions))
+        print()
         print("RoC AUC:")
         print(roc_auc_score(true_val, probabilites))
         print()
@@ -139,10 +135,10 @@ def load_image_dataset(image_size, mean, std):
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
     return load_data_imagefolder(
-        data_dir="../dataset/new",
+        data_dir="/data/deepfake",
         data_transform=data_transform,
-        num_workers=70,
-        train_batch_size=500,
+        num_workers=10,
+        train_batch_size=10,
         test_batch_size=500,
         seed=420,
         test_split_size=0.25,
@@ -159,7 +155,9 @@ def pre_run():
 
     # Find LR first
     logs, losses = find_lr(model, criterion, dataloaders["train"])
-    plt.plot(logs, losses)
+    torch.save(logs, 'pre_run_logs.pt')
+    torch.save(losses, 'pre_run_losses.pt')
+    # plt.plot(logs, losses)
 
 
 def run():
@@ -183,7 +181,7 @@ def run():
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=0.01,
-        div_factor=25.0,  # initial_lr = max_lr/div_factor
+        div_factor=10.0,  # initial_lr = max_lr/div_factor
         final_div_factor=10000.0,  # min_lr = initial_lr/final_div_factor
         epochs=num_epochs,
         steps_per_epoch=len(dataloaders["train"]),
@@ -218,9 +216,9 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
     batch_num = 0
     losses = []
     log_lrs = []
-    for inputs, labels in trn_loader:
+    for inputs, labels in tqdm(trn_loader):
         batch_num += 1
-
+        # inputs = inputs["image"]  # To work with albumentations
         inputs = inputs.to(device)
         labels = labels.to(device)
 
@@ -229,7 +227,7 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
         loss = criterion(outputs, labels)
 
         # Compute the smoothed loss
-        avg_loss = beta * avg_loss + (1 - beta) * loss.data[0]
+        avg_loss = beta * avg_loss + (1 - beta) * loss.item()
         smoothed_loss = avg_loss / (1 - beta ** batch_num)
 
         # Stop if the loss is exploding
@@ -255,4 +253,4 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    run()
+    pre_run()

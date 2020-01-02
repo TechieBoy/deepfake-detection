@@ -18,6 +18,7 @@ def load_data_imagefolder(
     seed,
     test_split_size,
 ):
+    print("Loading data")
     np.random.seed(seed)
     torch.manual_seed(seed)
     img_dataset = datasets.ImageFolder(data_dir, data_transform)
@@ -75,7 +76,7 @@ def load_data_imagefolder(
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}
     dataloaders = {"train": train_loader, "test": test_loader}
-
+    print("Done loading data")
     return dataset_dict, dataloaders
 
 
@@ -86,7 +87,7 @@ def combine_metadata():
         if os.path.isdir(f):
             g = pd.read_json(os.path.join(f, "metadata.json")).T.reset_index()
             g["folder"] = f
-            g = g[g['split'] != 'test']
+            g = g[g["split"] != "test"]
             g = g.drop(columns=["split"])
             dfs.append(g)
 
@@ -94,5 +95,5 @@ def combine_metadata():
     full_df.to_csv("combined_metadata.csv", index=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     combine_metadata()
