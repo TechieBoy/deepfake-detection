@@ -9,12 +9,28 @@ from load_data import load_data_imagefolder
 from meso import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import get_image_transform_no_crop_scale
-
+import math
+import matplotlib.pyplot as plt
 
 device = torch.device("cuda:0")
 
 # sorted
 classes = ["fake", "real"]
+
+
+def load_device(model, use_multiple=True):
+    device = torch.device("cpu")
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+
+    model.to(device)
+
+    if use_multiple:
+        if torch.cuda.device_count() > 1:
+            print("Using", torch.cuda.device_count(), "GPUs!")
+            torch.distributed.init_process_group(backend="nccl")
+            model = nn.parallel.DistributedDataParallel(model)
 
 
 def train_model(
@@ -59,6 +75,8 @@ def train_model(
                     if phase == "train":
                         loss.backward()
                         optimizer.step()
+                        # For OneCycleLR
+                        scheduler.step()
                     else:
                         # Softmax and calculate metrics
                         softmaxed = nn.functional.softmax(outputs, dim=1)
@@ -78,14 +96,15 @@ def train_model(
 
             print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
 
-            if phase == "test":
-                scheduler.step(epoch_loss)
+            # If using ReduceLRonPlateau or similar to be called every epoch
+            # if phase == "test":
+            #     scheduler.step(epoch_loss)
 
             # deep copy the model
             if phase == "test" and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
-                torch.save(best_model_wts, f"meso_epoch_{epoch}.pt")
+                torch.save(best_model_wts, f"meso_epoch_{epoch+1}.pt")
 
         true_val = true_val.numpy()
         predictions = predictions.numpy()
@@ -115,13 +134,11 @@ def train_model(
     return model
 
 
-def run():
-    model = get_model(2)
-    image_size = model.get_image_size()
-    mean, std = model.get_mean_std()
+# Define which transform to use here
+def load_image_dataset(image_size, mean, std):
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
-    datasets, dataloaders = load_data_imagefolder(
+    return load_data_imagefolder(
         data_dir="../dataset/new",
         data_transform=data_transform,
         num_workers=70,
@@ -130,19 +147,111 @@ def run():
         seed=420,
         test_split_size=0.25,
     )
+
+
+def pre_run():
+    model = get_model(2)
+    datasets, dataloaders = load_image_dataset(
+        model.get_image_size(), *(model.get_mean_std())
+    )
+    model = model.to(device)
+    criterion = nn.CrossEntropyLoss()
+
+    # Find LR first
+    logs, losses = find_lr(model, criterion, dataloaders["train"])
+    plt.plot(logs, losses)
+
+
+def run():
+    model = get_model(2)
+    datasets, dataloaders = load_image_dataset(
+        model.get_image_size(), *(model.get_mean_std())
+    )
+
     print("Classes array (check order)")
     print(classes)
 
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    optimizer = optim.AdamW(
+        model.parameters, lr=0.1, betas=(0.95, 0.99), weight_decay=0.05
+    )
+
+    num_epochs = 50
+    # Have to call step every batch!!
+    scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer,
+        max_lr=0.01,
+        div_factor=25.0,  # initial_lr = max_lr/div_factor
+        final_div_factor=10000.0,  # min_lr = initial_lr/final_div_factor
+        epochs=num_epochs,
+        steps_per_epoch=len(dataloaders["train"]),
+        pct_start=0.3,
+        cycle_momentum=True,
+        base_momentum=0.85,
+        max_momentum=0.95,
+        last_epoch=-1,  # Change this if resuming
+    )
     model = train_model(
-        model, datasets, dataloaders, criterion, optimizer, scheduler, 50
+        model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs
     )
 
     torch.save(model.state_dict(), "meso.pt")
+
+
+def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=0.98):
+    """
+    https://sgugger.github.io/how-do-you-find-a-good-learning-rate.html
+    https://sgugger.github.io/the-1cycle-policy.html
+    logs,losses = find_lr()
+    plt.plot(logs,losses)
+    For a OneCycleLR, The maximum should be the value picked with the Learning Rate Finder, and the lower one can be ten times lower.
+    """
+    optimizer = optim.SGD(net.parameters(), lr=1e-1)
+    num = len(trn_loader) - 1
+    mult = (final_value / init_value) ** (1 / num)
+    lr = init_value
+    optimizer.param_groups[0]["lr"] = lr
+    avg_loss = 0.0
+    best_loss = 0.0
+    batch_num = 0
+    losses = []
+    log_lrs = []
+    for inputs, labels in trn_loader:
+        batch_num += 1
+
+        inputs = inputs.to(device)
+        labels = labels.to(device)
+
+        optimizer.zero_grad()
+        outputs = net(inputs)
+        loss = criterion(outputs, labels)
+
+        # Compute the smoothed loss
+        avg_loss = beta * avg_loss + (1 - beta) * loss.data[0]
+        smoothed_loss = avg_loss / (1 - beta ** batch_num)
+
+        # Stop if the loss is exploding
+        if batch_num > 1 and smoothed_loss > 4 * best_loss:
+            return log_lrs, losses
+
+        # Record the best loss
+        if smoothed_loss < best_loss or batch_num == 1:
+            best_loss = smoothed_loss
+
+        # Store the values
+        losses.append(smoothed_loss)
+        log_lrs.append(math.log10(lr))
+
+        # Do the SGD step
+        loss.backward()
+        optimizer.step()
+
+        # Update the lr for the next step
+        lr *= mult
+        optimizer.param_groups[0]["lr"] = lr
+    return log_lrs[10:-5], losses[10:-5]
 
 
 if __name__ == "__main__":

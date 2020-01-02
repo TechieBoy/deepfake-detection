@@ -83,11 +83,16 @@ def combine_metadata():
     folders = glob("/home/teh_devs/deepfake/raw/*")
     dfs = []
     for f in folders:
-        g = pd.read_json(os.path.join(f, "metadata.json")).T.reset_index()
-        g["folder"] = f
-        g = g.drop(columns=["split"])
-        dfs.append(g)
+        if os.path.isdir(f):
+            g = pd.read_json(os.path.join(f, "metadata.json")).T.reset_index()
+            g["folder"] = f
+            g = g[g['split'] != 'test']
+            g = g.drop(columns=["split"])
+            dfs.append(g)
 
     full_df = pd.concat(dfs, ignore_index=True)
     full_df.to_csv("combined_metadata.csv", index=False)
 
+
+if __name__ == '__main__':
+    combine_metadata()
