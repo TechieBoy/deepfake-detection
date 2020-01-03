@@ -132,9 +132,9 @@ dmypy.json
 .vscode/
 
 # saved models and other data
-head_pose/o/
-head_pose/dlib-models/
-head_pose/sample_images/
-head_pose/feat/
+experiments/head_pose/o/
+experiments/head_pose/dlib-models/
+experiments/head_pose/sample_images/
+experiments/head_pose/feat/
 saved_models/
 *.pt
