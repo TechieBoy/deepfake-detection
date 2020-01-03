@@ -8,7 +8,7 @@ from tqdm import tqdm
 from load_data import load_data_imagefolder
 from meso import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
-from transforms import get_image_transform_no_crop_scale
+from transforms import get_image_transform_no_crop_scale, get_test_transform
 import math
 import matplotlib.pyplot as plt
 
@@ -133,8 +133,10 @@ def train_model(
     return model
 
 
-# Define which transform to use here
-def load_image_dataset(image_size, mean, std, test_transform):
+def load_data_for_model(model):
+    image_size = model.get_image_size()
+    mean, std = model.get_mean_std()
+    test_transform = get_test_transform(image_size, mean, std)
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
     return load_data_imagefolder(
@@ -151,24 +153,20 @@ def load_image_dataset(image_size, mean, std, test_transform):
 
 def pre_run():
     model = get_model(2)
-    datasets, dataloaders = load_image_dataset(
-        model.get_image_size(), *(model.get_mean_std()), model.get_test_transform()
-    )
+    datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
 
     # Find LR first
     logs, losses = find_lr(model, criterion, dataloaders["train"])
-    torch.save(logs, 'pre_run_logs.pt')
-    torch.save(losses, 'pre_run_losses.pt')
+    torch.save(logs, "pre_run_logs.pt")
+    torch.save(losses, "pre_run_losses.pt")
     # plt.plot(logs, losses)
 
 
 def run():
     model = get_model(2)
-    datasets, dataloaders = load_image_dataset(
-        model.get_image_size(), *(model.get_mean_std()), model.get_test_transform()
-    )
+    datasets, dataloaders = load_data_for_model(model)
 
     print("Classes array (check order)")
     print(classes)

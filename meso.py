@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torchvision import transforms
 
 
 class MesoInception4(nn.Module):
@@ -98,15 +97,6 @@ class MesoInception4(nn.Module):
 
     def get_image_size(self):
         return (256, 256)
-
-    def get_test_transform(self):
-        return transforms.Compose(
-            [
-                transforms.Resize((256, 256)),
-                transforms.ToTensor(),
-                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
-            ]
-        )
 
 
 def get_model(num_classes):

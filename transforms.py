@@ -56,6 +56,10 @@ def get_image_transform_no_crop_scale(image_size, mean, std):
     # return lambda img: t(image=np.array(img))
 
 
+def get_test_transform(image_size, mean, std):
+    return transforms.Compose([transforms.Resize(image_size), transforms.ToTensor(), transforms.Normalize(mean, std)])
+
+
 def strong_aug(p=0.5):
     return Compose(
         [
