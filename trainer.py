@@ -141,9 +141,9 @@ def load_image_dataset(image_size, mean, std, test_transform):
         data_dir="/raid/deepfake/new",
         train_data_transform=data_transform,
         test_data_transform=test_transform,
-        num_workers=40,
-        train_batch_size=3200,
-        test_batch_size=3200,
+        num_workers=30,
+        train_batch_size=1600,
+        test_batch_size=1600,
         seed=420,
         test_split_size=0.20,
     )

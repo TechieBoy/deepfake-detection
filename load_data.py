@@ -71,7 +71,7 @@ def load_data_imagefolder(
         shuffle=False,
         num_workers=num_workers,
         batch_size=test_batch_size,
-        pin_memory=True,
+        pin_memory=False,
     )
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}
