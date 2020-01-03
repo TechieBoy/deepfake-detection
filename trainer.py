@@ -21,7 +21,6 @@ classes = ["fake", "real"]
 
 def load_multi_gpu(model):
     model.to(device)
-    print(torch.cuda.device_count())
     if torch.cuda.device_count() > 1:
         print("Using", torch.cuda.device_count(), "GPUs!")
         # torch.distributed.init_process_group(backend="nccl")
@@ -94,8 +93,8 @@ def train_model(
             dataset_size = len(datasets[phase])
             epoch_loss = running_loss / dataset_size
             epoch_acc = float(running_corrects) / dataset_size
-            writer.add_scalar(f"Loss/{phase}", epoch_loss, n_iter)
-            writer.add_scalar(f"Accuracy/{phase}", epoch_acc, n_iter)
+            writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
+            writer.add_scalar(f"Accuracy/{phase}", epoch_acc, epoch)
 
             print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
 
