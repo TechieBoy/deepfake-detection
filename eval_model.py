@@ -67,8 +67,7 @@ def get_evenly_spaced_frames(cap, num_frames):
 
 
 if __name__ == "__main__":
-    # import dlib.cuda as cuda
-    # print(cuda.get_num_devices())
+    # dlib.DLIB_USE_CUDA
     class_mapping = {"fake": 0, "real": 1}
     model = get_model(2)
     device = torch.device("cuda:0")

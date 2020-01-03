@@ -11,9 +11,10 @@ from sklearn.metrics import confusion_matrix, roc_auc_score, classification_repo
 from transforms import get_image_transform_no_crop_scale, get_test_transform
 import math
 import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
 
 device = torch.device("cuda:0")
-
+writer = SummaryWriter()
 # sorted
 classes = ["fake", "real"]
 
@@ -38,6 +39,7 @@ def train_model(
 
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
+    n_iter = 0
 
     for epoch in range(num_epochs):
         print(f"Epoch {epoch + 1}/{num_epochs}")
@@ -58,6 +60,7 @@ def train_model(
             running_corrects = 0
 
             for inputs, labels in tqdm(dataloaders[phase]):
+                n_iter += 1
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -91,6 +94,8 @@ def train_model(
             dataset_size = len(datasets[phase])
             epoch_loss = running_loss / dataset_size
             epoch_acc = float(running_corrects) / dataset_size
+            writer.add_scalar(f"Loss/{phase}", epoch_loss, n_iter)
+            writer.add_scalar(f"Accuracy/{phase}", epoch_acc, n_iter)
 
             print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
 
@@ -108,6 +113,7 @@ def train_model(
         predictions = predictions.numpy()
         probabilites = probabilites.numpy()
         print(classification_report(true_val, predictions, target_names=classes))
+        writer.add_pr_curve('pr_curve', true_val, probabilites, epoch)
         print("Confusion Matrix")
         print(confusion_matrix(true_val, predictions))
         print()
@@ -179,7 +185,7 @@ def run():
         model.parameters(), lr=0.1, betas=(0.96, 0.99), weight_decay=0.05
     )
 
-    num_epochs = 25
+    num_epochs = 72
     # Have to call step every batch!!
     scheduler = optim.lr_scheduler.OneCycleLR(
         optimizer,
@@ -188,11 +194,11 @@ def run():
         final_div_factor=10000.0,  # min_lr = initial_lr/final_div_factor
         epochs=num_epochs,
         steps_per_epoch=len(dataloaders["train"]),
-        pct_start=0.3,
+        pct_start=0.35,  # percentage of time going up/down
         cycle_momentum=True,
         base_momentum=0.85,
         max_momentum=0.95,
-        last_epoch=-1,  # Change this if resuming
+        last_epoch=-1,  # Change this if resuming (Pass in total number of batches done, not epochs!!)
     )
     model = train_model(
         model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs
@@ -257,3 +263,4 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 if __name__ == "__main__":
     run()
+    writer.close()
