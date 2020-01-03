@@ -160,6 +160,17 @@ def convert_video_to_frames_per_frame(input_path, per_n):
     return frames
 
 
+def get_exact_frame(input_path, i):
+    cap = cv2.VideoCapture(input_path)
+    num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    assert i < num_frames
+    cap.set(1, i)
+    ret, frame = cap.read()
+    if ret:
+        return frame
+    return None
+
+
 def load_model(device):
     device = torch.device(device)
     detector = MTCNN(image_size=300, margin=30, device=device, post_process=False)

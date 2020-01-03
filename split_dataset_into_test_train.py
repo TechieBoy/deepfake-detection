@@ -27,7 +27,7 @@ for s, f in zip(series, folders):
             else:
                 print(f"{file_name} does not exist")
 
-
+# Second pass for missed files (longer videos with more frames)
 for name in real_series:
     fl = glob(f"/home/teh_devs/deepfake/dataset/new/{name}*")
     for i in fl:
