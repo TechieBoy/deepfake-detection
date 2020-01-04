@@ -58,7 +58,7 @@ def train_model(
             running_loss = 0.0
             running_corrects = 0
 
-            for inputs, labels in tqdm(dataloaders[phase]):
+            for inputs, labels in tqdm(dataloaders[phase], ncols=0, mininterval=1):
                 n_iter += 1
                 inputs = inputs.to(device)
                 labels = labels.to(device)

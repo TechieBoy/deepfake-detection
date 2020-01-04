@@ -80,23 +80,31 @@ if __name__ == "__main__":
 
     files = glob("../kaggle/test_videos/*")
     for fil in files:
-        video_name = fil.split("/")[-1]
-        if video_name != "metadata.json":
+        try:
+            video_name = fil.split("/")[-1]
             print(video_name)
             cap = cv2.VideoCapture(fil)
 
             frames = get_evenly_spaced_frames(cap, 4)
             faces = detect_faces_mtcnn(device, frames)
+
             sol = eval_model(device, class_mapping, model, faces)
             if sol is None:
                 print("Frame list empty, trying with 30 frames next")
+
                 frames = get_evenly_spaced_frames(cap, 30)
                 faces = detect_faces_mtcnn(device, frames)
-                sol = eval_model(device, class_mapping, model, faces)
 
-            # print(sol)
+                sol = eval_model(device, class_mapping, model, faces)
+                if sol is None:
+                    sol = 0.5
             cap.release()
-            fd[video_name] = sol
+        except Exception as e:
+            print(e)
+            sol = 0.5
+
+        print(sol)
+        fd[video_name] = sol
     with open("submission.csv", "w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         writer.writerow(["filename", "label"])
