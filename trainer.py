@@ -6,17 +6,21 @@ import time
 import copy
 from tqdm import tqdm
 from load_data import load_data_imagefolder
-from meso import get_model
+from xception import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import get_image_transform_no_crop_scale, get_test_transform
 import math
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
-device = torch.device("cuda:0")
 writer = SummaryWriter()
+device = torch.device("cuda:0")
+
 # sorted
 classes = ["fake", "real"]
+
+USING_ALBUMENTATIONS = False
+USE_PINNED_MEMORY = True
 
 
 def load_multi_gpu(model):
@@ -60,8 +64,11 @@ def train_model(
 
             for inputs, labels in tqdm(dataloaders[phase], ncols=0, mininterval=1):
                 n_iter += 1
-                inputs = inputs.to(device)
-                labels = labels.to(device)
+                non_blocking_transfer = True if phase == 'train' and USE_PINNED_MEMORY else False
+                if phase == 'train' and USING_ALBUMENTATIONS:
+                    inputs = inputs['image']
+                inputs = inputs.to(device, non_blocking=non_blocking_transfer)
+                labels = labels.to(device, non_blocking=non_blocking_transfer)
 
                 optimizer.zero_grad()
 
@@ -145,12 +152,13 @@ def load_data_for_model(model):
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
     return load_data_imagefolder(
-        data_dir="/raid/deepfake/new",
+        data_dir="/data/deepfake/",
         train_data_transform=data_transform,
         test_data_transform=test_transform,
+        use_pinned_memory=USE_PINNED_MEMORY,  # Only for train, test always uses non pinned
         num_workers=30,
-        train_batch_size=1600,
-        test_batch_size=1600,
+        train_batch_size=120,
+        test_batch_size=120,
         seed=420,
         test_split_size=0.20,
     )
@@ -166,7 +174,7 @@ def pre_run():
     logs, losses = find_lr(model, criterion, dataloaders["train"])
     torch.save(logs, "pre_run_logs.pt")
     torch.save(losses, "pre_run_losses.pt")
-    # plt.plot(logs, losses)
+    plt.plot(logs, losses)
 
 
 def run():
@@ -224,11 +232,12 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
     batch_num = 0
     losses = []
     log_lrs = []
-    for inputs, labels in tqdm(trn_loader):
+    for inputs, labels in tqdm(trn_loader, ncols=0, mininterval=1):
         batch_num += 1
-        # inputs = inputs["image"]  # To work with albumentations
-        inputs = inputs.to(device)
-        labels = labels.to(device)
+        if USING_ALBUMENTATIONS:
+            inputs = inputs["image"]
+        inputs = inputs.to(device, non_blocking=USE_PINNED_MEMORY)
+        labels = labels.to(device, non_blocking=USE_PINNED_MEMORY)
 
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -261,5 +270,5 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    run()
+    pre_run()
     writer.close()

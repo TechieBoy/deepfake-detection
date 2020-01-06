@@ -13,6 +13,7 @@ def load_data_imagefolder(
     data_dir,
     train_data_transform,
     test_data_transform,
+    use_pinned_memory,
     num_workers,
     train_batch_size,
     test_batch_size,
@@ -63,7 +64,7 @@ def load_data_imagefolder(
         sampler=sampler,
         num_workers=num_workers,
         batch_size=train_batch_size,
-        pin_memory=True,
+        pin_memory=use_pinned_memory,
     )
 
     test_loader = DataLoader(

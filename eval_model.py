@@ -36,10 +36,8 @@ def get_exact_frames(cap, frame_indices):
     return frames
 
 
-def detect_faces_mtcnn(device, frames):
-    detector = MTCNN(image_size=300, margin=30, device=device, post_process=False)
+def detect_faces_mtcnn(detector, frames):
     pil_images = [Image.fromarray(frame) for frame in frames]
-    print(len(pil_images))
     faces = detector(pil_images)
     return faces
 
@@ -62,7 +60,9 @@ def eval_model(device, class_mapping, model, faces):
 
 def get_evenly_spaced_frames(cap, num_frames):
     total_frames = get_frame_count(cap)
-    frame_indices = np.linspace(0, total_frames, num_frames, dtype=np.int)
+    if num_frames == 1:
+        return get_exact_frames(cap, [total_frames // 2])
+    frame_indices = np.linspace(total_frames // 4, (3 * total_frames) // 4, num_frames, dtype=np.int)
     return get_exact_frames(cap, frame_indices)
 
 
@@ -71,6 +71,7 @@ if __name__ == "__main__":
     class_mapping = {"fake": 0, "real": 1}
     model = get_model(2)
     device = torch.device("cuda:0")
+    detector = MTCNN(image_size=300, margin=30, device=device, post_process=False)
     model.to(device)
     model.load_state_dict(torch.load("saved_models/meso.pt"))
     # Eval mode
@@ -85,15 +86,15 @@ if __name__ == "__main__":
             print(video_name)
             cap = cv2.VideoCapture(fil)
 
-            frames = get_evenly_spaced_frames(cap, 4)
-            faces = detect_faces_mtcnn(device, frames)
+            frames = get_evenly_spaced_frames(cap, 1)
+            faces = detect_faces_mtcnn(detector, frames)
 
             sol = eval_model(device, class_mapping, model, faces)
             if sol is None:
-                print("Frame list empty, trying with 30 frames next")
+                print("Frame list empty, trying with 2 frames next")
 
-                frames = get_evenly_spaced_frames(cap, 30)
-                faces = detect_faces_mtcnn(device, frames)
+                frames = get_evenly_spaced_frames(cap, 2)
+                faces = detect_faces_mtcnn(detector, frames)
 
                 sol = eval_model(device, class_mapping, model, faces)
                 if sol is None:

@@ -187,9 +187,15 @@ class Xception(nn.Module):
         x = self.features(input)
         x = self.logits(x)
         return x
+    
+    def get_mean_std(self):
+        return ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+
+    def get_image_size(self):
+        return (299, 299)
 
 
-def xception(num_classes=2):
+def get_model(num_classes=2):
     model = Xception(num_classes=num_classes)
     model.last_linear = model.fc
     del model.fc
