@@ -141,9 +141,8 @@ def convert_with_mtcnn_parallel(detector, base_folder, folder):
         detect_faces_mtcnn_and_save(detector, base_folder, base_video, frames)
 
 
-def convert_video_to_frames_per_frame(input_path, per_n):
-    capture = cv2.VideoCapture(input_path)
-    num_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+def convert_video_to_frames_per_frame(capture, per_n):
+    num_frames = get_frame_count(capture)
     frames = []
     for i in range(0, num_frames):
         ret = capture.grab()
@@ -156,19 +155,45 @@ def convert_video_to_frames_per_frame(input_path, per_n):
                     image, (width // 2, height // 2), interpolation=cv2.INTER_AREA
                 )
                 frames.append(frame)
-    capture.release()
     return frames
 
 
-def get_exact_frame(input_path, i):
-    cap = cv2.VideoCapture(input_path)
+def get_frame_count(cap):
     num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    assert i < num_frames
-    cap.set(1, i)
-    ret, frame = cap.read()
-    if ret:
-        return frame
-    return None
+    return num_frames
+
+
+def get_exact_frames(cap, frame_indices):
+    """Gets all frames with the indices in frame indices (0 based)"""
+    frames = []
+    for index in frame_indices:
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+        ret, frame = cap.read()
+        if ret:
+            frames.append(frame)
+    return frames
+
+
+def get_exact_frames_for_optical_flow(cap, frame_indices):
+    """Gets all frames and 4 ahead with the indices in frame indices (0 based)"""
+    frames = []
+    index_list = []
+    for index in frame_indices:
+        for i in range(4):
+            idx = index + i
+
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if ret:
+                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                height, width, channels = image.shape
+                image = cv2.resize(
+                    image, (width // 2, height // 2), interpolation=cv2.INTER_AREA
+                )
+                frames.append(frame)
+                index_list.append(idx)
+    return frames, index_list
 
 
 def load_model(device):
@@ -177,46 +202,63 @@ def load_model(device):
     return detector
 
 
-def detect_faces_mtcnn_and_save(detector, base_folder, base_video, frames):
+def detect_faces_mtcnn_and_save(
+    detector, base_folder, base_video, frames, filenames=None
+):
     pil_images = [Image.fromarray(frame) for frame in frames]
-    filenames = [
-        os.path.join(base_folder, f"{base_video}_face_{i}.jpg")
-        for i, _ in enumerate(pil_images)
-    ]
+    if filenames is None:
+        filenames = [
+            os.path.join(base_folder, f"{base_video}_face_{i}.jpg")
+            for i, _ in enumerate(pil_images)
+        ]
     faces = detector(pil_images, filenames)
     return faces
-
-
-failed = []
 
 
 def convert_video_to_frames_with_mtcnn(detector, base_folder, folder):
     print(folder)
     for video in tqdm(os.listdir(folder)):
-        if video != "metadata.json" and video != "frames" and video != "audio":
+        name = video.split(".")
+        try:
+            name, extension = name[0], name[1]
+        except IndexError:
+            continue
+        if extension == "mp4":
             try:
-                frames = convert_video_to_frames_per_frame(
-                    os.path.join(folder, video), 10
+                capture = cv2.VideoCapture(os.path.join(folder, video))
+                total_frames = get_frame_count(capture)
+                frame_begin = 10
+                frame_end = total_frames - 8
+                begin_indices = [
+                    i for i in range(frame_begin, frame_end, total_frames // 4)
+                ]
+
+                frames, indices = get_exact_frames_for_optical_flow(
+                    capture, begin_indices
                 )
-                base_video = video.split(".")[0]
-                detect_faces_mtcnn_and_save(detector, base_folder, base_video, frames)
+                
+                new_video_folder = os.path.join(base_folder, name)
+                os.mkdir(new_video_folder)
+                filenames = [
+                    os.path.join(new_video_folder, f"{name}_face_{i}.jpg")
+                    for i in indices
+                ]
+                detect_faces_mtcnn_and_save(detector, new_video_folder, name, frames, filenames)
+                capture.release()
             except Exception as e:
                 print(video)
                 print(e)
-                failed.append(os.path.join(folder, video))
                 continue
 
 
 if __name__ == "__main__":
-    base_folder = "../dataset/new/"
+    base_folder = "/data/of/"
 
     folder_list = []
-    for i in range(50):
+    print("Doing first 5 folders")
+    for i in range(5):
         folder_list.append(f"/home/teh_devs/deepfake/raw/dfdc_train_part_{i}")
 
     detector = load_model(device="cuda:0")
     for f in folder_list:
         convert_video_to_frames_with_mtcnn(detector, base_folder, f)
-    if failed:
-        with open(f"failed.pickle", "wb") as handle:
-            pickle.dump(failed, handle)
