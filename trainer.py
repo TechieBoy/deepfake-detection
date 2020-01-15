@@ -5,7 +5,7 @@ import torch.optim as optim
 import time
 import copy
 from tqdm import tqdm
-from load_data import load_data_imagefolder
+from load_data import load_data_imagefolder, load_data_flofolder
 from xception import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import get_image_transform_no_crop_scale, get_test_transform
@@ -151,21 +151,31 @@ def load_data_for_model(model):
     test_transform = get_test_transform(image_size, mean, std)
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
-    return load_data_imagefolder(
-        data_dir="/data/deepfake/",
-        train_data_transform=data_transform,
-        test_data_transform=test_transform,
-        use_pinned_memory=USE_PINNED_MEMORY,  # Only for train, test always uses non pinned
-        num_workers=30,
+    # return load_data_imagefolder(
+    #     data_dir="/data/deepfake/",
+    #     train_data_transform=data_transform,
+    #     test_data_transform=test_transform,
+    #     use_pinned_memory=USE_PINNED_MEMORY,  # Only for train, test always uses non pinned
+    #     num_workers=30,
+    #     train_batch_size=120,
+    #     test_batch_size=120,
+    #     seed=420,
+    #     test_split_size=0.20,
+    # )
+
+    return load_data_flofolder(
+        data_dir="/home/teh_devs/deepfake/dataset/of",
+        use_pinned_memory=USE_PINNED_MEMORY,
+        num_workers=70,
         train_batch_size=120,
         test_batch_size=120,
         seed=420,
-        test_split_size=0.20,
+        test_split_size=0.20
     )
 
 
 def pre_run():
-    model = get_model(2)
+    model = get_model(2, 2)
     datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
@@ -174,7 +184,7 @@ def pre_run():
     logs, losses = find_lr(model, criterion, dataloaders["train"])
     torch.save(logs, "pre_run_logs.pt")
     torch.save(losses, "pre_run_losses.pt")
-    plt.plot(logs, losses)
+    # plt.plot(logs, losses)
 
 
 def run():

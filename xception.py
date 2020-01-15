@@ -92,7 +92,7 @@ class Xception(nn.Module):
     https://arxiv.org/pdf/1610.02357.pdf
     """
 
-    def __init__(self, num_classes=1000):
+    def __init__(self, num_classes=1000, num_channels=3):
         """ Constructor
         Args:
             num_classes: number of classes
@@ -100,7 +100,7 @@ class Xception(nn.Module):
         super(Xception, self).__init__()
         self.num_classes = num_classes
 
-        self.conv1 = nn.Conv2d(3, 32, 3, 2, 0, bias=False)
+        self.conv1 = nn.Conv2d(num_channels, 32, 3, 2, 0, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.relu1 = nn.ReLU(inplace=True)
 
@@ -195,8 +195,8 @@ class Xception(nn.Module):
         return (299, 299)
 
 
-def get_model(num_classes=2):
-    model = Xception(num_classes=num_classes)
+def get_model(num_classes=2, num_channels=3):
+    model = Xception(num_classes=num_classes, num_channels=num_channels)
     model.last_linear = model.fc
     del model.fc
     return model
