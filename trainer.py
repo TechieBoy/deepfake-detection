@@ -34,9 +34,9 @@ def load_multi_gpu(model):
         # torch.distributed.init_process_group(backend="nccl")
         # model = nn.parallel.DistributedDataParallel(model)
         model = nn.DataParallel(model)
-        return model
     else:
-        raise AssertionError("Multiple GPU's not available")
+        print("Multiple GPU's not available")
+    return model
 
 
 def train_model(
@@ -210,7 +210,7 @@ def run():
         model, datasets, dataloaders, criterion, optimizer, scheduler, hp.num_epochs, save_loc
     )
 
-    torch.save(model.state_dict(), "meso.pt")
+    torch.save(model.state_dict(), "flow.pt")
 
 
 def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=0.98):
@@ -269,5 +269,5 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    pre_run()
+    run()
     writer.close()
