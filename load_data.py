@@ -177,9 +177,10 @@ class FloDataset(torch.utils.data.Dataset):
 class FloDatasetHDF(torch.utils.data.Dataset):
     """
     HDF File of following format
-    flow -> total x 300 x 300 x 2 optical flow data, np.float32 (fakes first then real)
     num_fake -> single uint32 number of fakes
     num_real -> single uint32 number of real
+    total = num_fake + num_real
+    flow -> total x 300 x 300 x 2 optical flow data, np.float32 (fakes first then real)
     mean -> (2,) np.float64, mean per channel
     std -> (2,) np.float64, std per channel
     """
@@ -187,15 +188,21 @@ class FloDatasetHDF(torch.utils.data.Dataset):
     def __init__(self, root):
         super(FloDatasetHDF, self).__init__()
         self.root = root
-        self.classes = ["fake", "real"]
-        self.class_to_idx = {"fake": 0, "real": 1}
+
+        self.flow_key = "flow"
+        self.num_real_key = "num_real"
+        self.num_fake_key = "num_fake"
+        self.mean_key = "mean"
+        self.std_key = "std"
 
         with h5py.File(self.root, "r") as hdfile:
-            self.num_fake = hdfile["num_fake"].value
-            self.num_real = hdfile["num_real"].value
-            self.mean = hdfile["mean"].value
-            self.std = hdfile["std"].value
+            self.num_fake = hdfile[self.num_fake_key][()][0]
+            self.num_real = hdfile[self.num_real_key][()][0]
+            self.mean = hdfile[self.mean_key][()]
+            self.std = hdfile[self.std_key][()]
 
+        self.classes = ["fake", "real"]
+        self.class_to_idx = {"fake": 0, "real": 1}
         self.targets = [0 for _ in range(self.num_fake)] + [
             1 for _ in range(self.num_real)
         ]
@@ -207,10 +214,11 @@ class FloDatasetHDF(torch.utils.data.Dataset):
             target = 0
 
         with h5py.File(self.root, "r") as hdfile:
-            sample = hdfile["flow"][index].value
+            sample = hdfile["flow"][index]
 
         sample -= self.mean
         sample /= self.std
+        sample = torch.from_numpy(sample).permute(2, 0, 1)  # Channels first
 
         return sample, target
 
