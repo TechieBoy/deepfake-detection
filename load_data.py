@@ -8,30 +8,21 @@ import pandas as pd
 import os
 import copy
 import h5py
+from hp import hp
 
 
-def load_data_imagefolder(
-    data_dir,
-    train_data_transform,
-    test_data_transform,
-    use_pinned_memory,
-    num_workers,
-    train_batch_size,
-    test_batch_size,
-    seed,
-    test_split_size,
-):
+def load_data_imagefolder(train_data_transform, test_data_transform):
     print("Loading data")
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    img_dataset = datasets.ImageFolder(data_dir, train_data_transform)
+    np.random.seed(hp.seed)
+    torch.manual_seed(hp.seed)
+    img_dataset = datasets.ImageFolder(hp.data_dir, train_data_transform)
     print(img_dataset.class_to_idx)
     dataset_size = len(img_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
         indices,
-        random_state=seed,
-        test_size=test_split_size,
+        random_state=hp.seed,
+        test_size=hp.test_split_percent,
         stratify=img_dataset.targets,
     )
 
@@ -41,26 +32,29 @@ def load_data_imagefolder(
     train_dataset = Subset(img_dataset, train_indices)
     test_dataset = Subset(test_img_dataset, test_indices)
 
-    weights = make_weights_for_balanced_classes(
-        img_dataset.targets, train_indices, len(img_dataset.classes)
-    )
-    weights = torch.DoubleTensor(weights)
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+    if hp.balanced_sampling:
+        weights = make_weights_for_balanced_classes(
+            img_dataset.targets, train_indices, len(img_dataset.classes)
+        )
+        weights = torch.DoubleTensor(weights)
+        sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+    else:
+        sampler = None
 
     train_loader = DataLoader(
         train_dataset,
         sampler=sampler,
-        num_workers=num_workers,
-        batch_size=train_batch_size,
-        pin_memory=use_pinned_memory,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.train_batch_size,
+        pin_memory=hp.use_pinned_memory_train,
     )
 
     test_loader = DataLoader(
         test_dataset,
         shuffle=False,
-        num_workers=num_workers,
-        batch_size=test_batch_size,
-        pin_memory=False,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.test_batch_size,
+        pin_memory=hp.use_pinned_memory_test,
     )
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}
@@ -69,53 +63,48 @@ def load_data_imagefolder(
     return dataset_dict, dataloaders
 
 
-def load_data_flofolder(
-    data_dir,
-    use_pinned_memory,
-    num_workers,
-    train_batch_size,
-    test_batch_size,
-    seed,
-    test_split_size,
-):
+def load_data_flofolder():
     print("Loading data")
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    np.random.seed(hp.seed)
+    torch.manual_seed(hp.seed)
 
-    flo_dataset = FloDataset(data_dir)
+    flo_dataset = FloDatasetHDF(hp.data_dir)
     print(flo_dataset.class_to_idx)
     dataset_size = len(flo_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
         indices,
-        random_state=seed,
-        test_size=test_split_size,
+        random_state=hp.seed,
+        test_size=hp.test_split_percent,
         stratify=flo_dataset.targets,
     )
 
     train_dataset = Subset(flo_dataset, train_indices)
     test_dataset = Subset(flo_dataset, test_indices)
 
-    weights = make_weights_for_balanced_classes(
-        flo_dataset.targets, train_indices, len(flo_dataset.classes)
-    )
-    weights = torch.DoubleTensor(weights)
-    sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+    if hp.balanced_sampling:
+        weights = make_weights_for_balanced_classes(
+            flo_dataset.targets, train_indices, len(flo_dataset.classes)
+        )
+        weights = torch.DoubleTensor(weights)
+        sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+    else:
+        sampler = None
 
     train_loader = DataLoader(
         train_dataset,
         sampler=sampler,
-        num_workers=num_workers,
-        batch_size=train_batch_size,
-        pin_memory=use_pinned_memory,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.train_batch_size,
+        pin_memory=hp.use_pinned_memory_train,
     )
 
     test_loader = DataLoader(
         test_dataset,
         shuffle=False,
-        num_workers=num_workers,
-        batch_size=test_batch_size,
-        pin_memory=False,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.test_batch_size,
+        pin_memory=hp.use_pinned_memory_test,
     )
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}

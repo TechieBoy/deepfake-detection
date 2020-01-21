@@ -9,3 +9,5 @@ cat     ${line%????}/info.txt  | grep -o -m 1 '..... fps' >> ${line%????}/$name.
 rm ${line%????}/info.txt
 #run parallely after installing sudo apt install parallel 
 # ls -R | grep mp4 | parallel -j 20 /home/teh_devs/deepfake/deepfake-detection/extract_v1.sh
+# Run below command to get all the iframes into 1 folder
+# find . -name "*.jpg" -exec cp "{}" ./iframes/ \;

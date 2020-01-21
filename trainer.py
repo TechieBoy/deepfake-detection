@@ -3,7 +3,8 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import time
-import copy
+import os
+from datetime import datetime
 from tqdm import tqdm
 from load_data import load_data_imagefolder, load_data_flofolder
 from xception import get_model
@@ -12,15 +13,18 @@ from transforms import get_image_transform_no_crop_scale, get_test_transform
 import math
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+from hp import hp
+
+
+if not os.path.exists(hp.save_folder):
+    os.mkdir(hp.save_folder)
+
 
 writer = SummaryWriter()
 device = torch.device("cuda:0")
 
 # sorted
 classes = ["fake", "real"]
-
-USING_ALBUMENTATIONS = False
-USE_PINNED_MEMORY = True
 
 
 def load_multi_gpu(model):
@@ -36,11 +40,10 @@ def load_multi_gpu(model):
 
 
 def train_model(
-    model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs=25
+    model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs, save_loc
 ):
     since = time.time()
 
-    best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
     n_iter = 0
 
@@ -64,9 +67,11 @@ def train_model(
 
             for inputs, labels in tqdm(dataloaders[phase], ncols=0, mininterval=1):
                 n_iter += 1
-                non_blocking_transfer = True if phase == 'train' and USE_PINNED_MEMORY else False
-                if phase == 'train' and USING_ALBUMENTATIONS:
-                    inputs = inputs['image']
+                non_blocking_transfer = (
+                    True if phase == "train" and hp.use_pinned_memory_train else False
+                )
+                if phase == "train" and hp.using_augments:
+                    inputs = inputs["image"]
                 inputs = inputs.to(device, non_blocking=non_blocking_transfer)
                 labels = labels.to(device, non_blocking=non_blocking_transfer)
 
@@ -82,8 +87,8 @@ def train_model(
                     if phase == "train":
                         loss.backward()
                         optimizer.step()
-                        # For OneCycleLR
-                        scheduler.step()
+                        if hp.use_one_cycle_lr:
+                            scheduler.step()
                     else:
                         # Softmax and calculate metrics
                         softmaxed = nn.functional.softmax(outputs, dim=1)
@@ -108,18 +113,19 @@ def train_model(
             # If using ReduceLRonPlateau or similar to be called every epoch
             # if phase == "test":
             #     scheduler.step(epoch_loss)
+            if hp.use_step_lr:
+                scheduler.step()
 
-            # deep copy the model
             if phase == "test" and epoch_acc > best_acc:
                 best_acc = epoch_acc
-                best_model_wts = copy.deepcopy(model.state_dict())
-                torch.save(best_model_wts, f"meso_epoch_{epoch+1}.pt")
+            file_name = f"{hp.model_name}_{epoch+1}.pt"
+            torch.save(model.state_dict(), os.path.join(save_loc, file_name))
 
         true_val = true_val.numpy()
         predictions = predictions.numpy()
         probabilites = probabilites.numpy()
         print(classification_report(true_val, predictions, target_names=classes))
-        writer.add_pr_curve('pr_curve', true_val, probabilites, epoch)
+        writer.add_pr_curve("pr_curve", true_val, probabilites, epoch)
         print("Confusion Matrix")
         print(confusion_matrix(true_val, predictions))
         print()
@@ -141,7 +147,6 @@ def train_model(
     print("Best val Acc: {:4f}".format(best_acc))
 
     # load best model weights
-    model.load_state_dict(best_model_wts)
     return model
 
 
@@ -151,27 +156,11 @@ def load_data_for_model(model):
     test_transform = get_test_transform(image_size, mean, std)
     data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
 
-    # return load_data_imagefolder(
-    #     data_dir="/data/deepfake/",
-    #     train_data_transform=data_transform,
-    #     test_data_transform=test_transform,
-    #     use_pinned_memory=USE_PINNED_MEMORY,  # Only for train, test always uses non pinned
-    #     num_workers=30,
-    #     train_batch_size=120,
-    #     test_batch_size=120,
-    #     seed=420,
-    #     test_split_size=0.20,
-    # )
-
-    return load_data_flofolder(
-        data_dir="/home/teh_devs/deepfake/dataset/of",
-        use_pinned_memory=USE_PINNED_MEMORY,
-        num_workers=70,
-        train_batch_size=120,
-        test_batch_size=120,
-        seed=420,
-        test_split_size=0.20
+    return load_data_imagefolder(
+        train_data_transform=data_transform, test_data_transform=test_transform
     )
+
+    # return load_data_flofolder()
 
 
 def pre_run():
@@ -188,7 +177,15 @@ def pre_run():
 
 
 def run():
-    model = get_model(2)
+    now = datetime.now()
+    print(now.strftime("%A, %d %B at %I:%M %p"))
+    save_loc = hp.model_name + now.strftime("%d%b%I:%M%p")
+    save_loc = os.path.join(hp.save_folder, save_loc)
+    if not os.path.isdir(save_loc):
+        os.mkdir(save_loc)
+
+    torch.save(hp, os.path.join(save_loc, hp.model_name + '-hp.pt'))
+    model = get_model(2, 2)
     datasets, dataloaders = load_data_for_model(model)
 
     print("Classes array (check order)")
@@ -196,29 +193,21 @@ def run():
 
     model = model.to(device)
     model = load_multi_gpu(model)
-    criterion = nn.CrossEntropyLoss()
 
-    optimizer = optim.AdamW(
-        model.parameters(), lr=0.1, betas=(0.96, 0.99), weight_decay=0.05
-    )
+    if hp.use_class_weights:
+        weights = torch.FloatTensor(hp.class_weights).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weights)
 
-    num_epochs = 72
-    # Have to call step every batch!!
-    scheduler = optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=0.01,
-        div_factor=15.0,  # initial_lr = max_lr/div_factor
-        final_div_factor=10000.0,  # min_lr = initial_lr/final_div_factor
-        epochs=num_epochs,
-        steps_per_epoch=len(dataloaders["train"]),
-        pct_start=0.35,  # percentage of time going up/down
-        cycle_momentum=True,
-        base_momentum=0.85,
-        max_momentum=0.95,
-        last_epoch=-1,  # Change this if resuming (Pass in total number of batches done, not epochs!!)
-    )
+    optimizer = optim.AdamW(model.parameters(), lr=hp.lr, weight_decay=hp.weight_decay)
+
+    if hp.use_step_lr:
+        scheduler = optim.lr_scheduler.StepLR(optimizer, **hp.step_sched_params)
+    elif hp.use_one_cycle_lr:
+        scheduler = optim.lr_scheduler.OneCycleLR(
+            optimizer, steps_per_epoch=len(dataloaders["train"]), **hp.oc_sched_params
+        )
     model = train_model(
-        model, datasets, dataloaders, criterion, optimizer, scheduler, num_epochs
+        model, datasets, dataloaders, criterion, optimizer, scheduler, hp.num_epochs, save_loc
     )
 
     torch.save(model.state_dict(), "meso.pt")
@@ -244,10 +233,10 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
     log_lrs = []
     for inputs, labels in tqdm(trn_loader, ncols=0, mininterval=1):
         batch_num += 1
-        if USING_ALBUMENTATIONS:
+        if hp.using_augments:
             inputs = inputs["image"]
-        inputs = inputs.to(device, non_blocking=USE_PINNED_MEMORY)
-        labels = labels.to(device, non_blocking=USE_PINNED_MEMORY)
+        inputs = inputs.to(device, non_blocking=hp.use_pinned_memory_train)
+        labels = labels.to(device, non_blocking=hp.use_pinned_memory_train)
 
         optimizer.zero_grad()
         outputs = net(inputs)

@@ -6,6 +6,7 @@ from facenet_pytorch import MTCNN
 from tqdm import tqdm
 from PIL import Image
 import pickle
+from face_detection import RetinaFace
 
 
 def delete_folders():
@@ -38,7 +39,7 @@ def convert_video_to_frames(input_path, output_folder):
         ret, frame = cap.read()
         if not ret:
             break
-        cv2.imwrite(os.path.join(output_folder, f"frame_{count}.jpg"), frame)
+        cv2.imwrite(os.path.join(output_folder, f"frame_{count}.png"), frame)
         count += 1
     cap.release()
 
@@ -78,7 +79,7 @@ def convert_video_to_frames_periodic(name_prefix, input_path, output_folder, dt)
         cap.set(cv2.CAP_PROP_POS_MSEC, (count * dt))
         success, frame = cap.read()
         cv2.imwrite(
-            os.path.join(output_folder, f"{name_prefix}_frame_{count}.jpg"), frame
+            os.path.join(output_folder, f"{name_prefix}_frame_{count}.png"), frame
         )
         count += 1
     cap.release()
@@ -96,7 +97,7 @@ def convert_video_to_face_frames_periodic(name_prefix, input_path, output_folder
         face = find_max_face(frame)
         if face is not None:
             cv2.imwrite(
-                os.path.join(output_folder, f"{name_prefix}_face_{num_face}.jpg"), face
+                os.path.join(output_folder, f"{name_prefix}_face_{num_face}.png"), face
             )
             num_face += 1
         count += 1
@@ -154,7 +155,7 @@ def convert_video_to_frames_per_frame(capture, per_n):
                 image = cv2.resize(
                     image, (width // 2, height // 2), interpolation=cv2.INTER_AREA
                 )
-                frames.append(frame)
+                frames.append(image)
     return frames
 
 
@@ -191,15 +192,19 @@ def get_exact_frames_for_optical_flow(cap, frame_indices):
                 image = cv2.resize(
                     image, (width // 2, height // 2), interpolation=cv2.INTER_AREA
                 )
-                frames.append(frame)
+                frames.append(image)
                 index_list.append(idx)
     return frames, index_list
 
 
 def load_model(device):
     device = torch.device(device)
-    detector = MTCNN(image_size=300, margin=30, device=device, post_process=False)
+    detector = MTCNN(image_size=160, margin=30, device=device, post_process=False)
     return detector
+
+
+def load_model_retina(device):
+    return RetinaFace(gpu_id=0)
 
 
 def detect_faces_mtcnn_and_save(
@@ -208,7 +213,7 @@ def detect_faces_mtcnn_and_save(
     pil_images = [Image.fromarray(frame) for frame in frames]
     if filenames is None:
         filenames = [
-            os.path.join(base_folder, f"{base_video}_face_{i}.jpg")
+            os.path.join(base_folder, f"{base_video}_face_{i}.png")
             for i, _ in enumerate(pil_images)
         ]
     faces = detector(pil_images, filenames)
@@ -236,14 +241,16 @@ def convert_video_to_frames_with_mtcnn(detector, base_folder, folder):
                 frames, indices = get_exact_frames_for_optical_flow(
                     capture, begin_indices
                 )
-                
+
                 new_video_folder = os.path.join(base_folder, name)
                 os.mkdir(new_video_folder)
                 filenames = [
-                    os.path.join(new_video_folder, f"{name}_face_{i}.jpg")
+                    os.path.join(new_video_folder, f"{name}_face_{i}.png")
                     for i in indices
                 ]
-                detect_faces_mtcnn_and_save(detector, new_video_folder, name, frames, filenames)
+                detect_faces_mtcnn_and_save(
+                    detector, new_video_folder, name, frames, filenames
+                )
                 capture.release()
             except Exception as e:
                 print(video)
@@ -252,12 +259,12 @@ def convert_video_to_frames_with_mtcnn(detector, base_folder, folder):
 
 
 if __name__ == "__main__":
-    base_folder = "/data/of/"
+    base_folder = "/home/teh_devs/deepfake/raw/test_vids"
 
-    folder_list = []
-    print("Doing first 5 folders")
-    for i in range(5):
-        folder_list.append(f"/home/teh_devs/deepfake/raw/dfdc_train_part_{i}")
+    folder_list = ["/home/teh_devs/deepfake/raw/test_vids"]
+    # print("Doing 15 to 20 folders")
+    # for i in range(15, 20):
+    #     folder_list.append(f"/home/teh_devs/deepfake/raw/dfdc_train_part_{i}")
 
     detector = load_model(device="cuda:0")
     for f in folder_list:
