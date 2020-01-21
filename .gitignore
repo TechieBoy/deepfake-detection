@@ -138,3 +138,5 @@ experiments/head_pose/sample_images/
 experiments/head_pose/feat/
 saved_models/
 *.pt
+*.hdf5
+*.ann
