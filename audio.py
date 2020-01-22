@@ -22,7 +22,7 @@ def read_audio(file_path):
                 offset = padding // 2
                 trim_y = np.pad(trim_y, (offset, padding - offset), "constant")
         return trim_y
-    except BaseException as e:
+    except Exception as e:
         print(f"Exception while reading file {e}, {file_path}")
         return np.zeros(tot_samples, dtype=np.float32)
 

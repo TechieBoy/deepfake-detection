@@ -63,12 +63,12 @@ def load_data_imagefolder(train_data_transform, test_data_transform):
     return dataset_dict, dataloaders
 
 
-def load_data_flofolder():
+def load_hdf_data(key):
     print("Loading data")
     np.random.seed(hp.seed)
     torch.manual_seed(hp.seed)
 
-    flo_dataset = FloDatasetHDF(hp.data_dir)
+    flo_dataset = HDFDataset(hp.data_dir, key)
     print(flo_dataset.class_to_idx)
     dataset_size = len(flo_dataset)
     indices = list(range(dataset_size))
@@ -174,22 +174,22 @@ class FloDataset(torch.utils.data.Dataset):
         return len(self.samples)
 
 
-class FloDatasetHDF(torch.utils.data.Dataset):
+class HDFDataset(torch.utils.data.Dataset):
     """
     HDF File of following format
     num_fake -> single uint32 number of fakes
     num_real -> single uint32 number of real
     total = num_fake + num_real
-    flow -> total x 300 x 300 x 2 optical flow data, np.float32 (fakes first then real)
+    key -> total x w x h x dim data, np.float32 (fakes first then real)
     mean -> (2,) np.float64, mean per channel
     std -> (2,) np.float64, std per channel
     """
 
-    def __init__(self, root):
-        super(FloDatasetHDF, self).__init__()
+    def __init__(self, root, key):
+        super(HDFDataset, self).__init__()
         self.root = root
 
-        self.flow_key = "flow"
+        self.key = key
         self.num_real_key = "num_real"
         self.num_fake_key = "num_fake"
         self.mean_key = "mean"
@@ -214,11 +214,14 @@ class FloDatasetHDF(torch.utils.data.Dataset):
             target = 0
 
         with h5py.File(self.root, "r") as hdfile:
-            sample = hdfile["flow"][index]
+            sample = hdfile[self.key][index]
 
         sample -= self.mean
         sample /= self.std
-        sample = torch.from_numpy(sample).permute(2, 0, 1)  # Channels first
+        if self.key == "flow":
+            sample = torch.from_numpy(sample).permute(2, 0, 1)  # Channels first
+        else:
+            sample = torch.from_numpy(sample).unsqueeze(0)
 
         return sample, target
 

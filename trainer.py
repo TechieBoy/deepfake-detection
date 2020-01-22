@@ -4,10 +4,11 @@ import torch.nn as nn
 import torch.optim as optim
 import time
 import os
+import shutil
 from datetime import datetime
 from tqdm import tqdm
-from load_data import load_data_imagefolder, load_data_flofolder
-from xception import get_model
+from load_data import load_data_imagefolder, load_hdf_data
+from audio_cnn import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import get_image_transform_no_crop_scale, get_test_transform
 import math
@@ -111,10 +112,11 @@ def train_model(
             print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
 
             # If using ReduceLRonPlateau or similar to be called every epoch
-            # if phase == "test":
-            #     scheduler.step(epoch_loss)
-            if hp.use_step_lr:
-                scheduler.step()
+            if phase == "test":
+                if hp.use_step_lr:
+                    scheduler.step()
+                elif hp.use_plateau_lr:
+                    scheduler.step(epoch_loss)
 
             if phase == "test" and epoch_acc > best_acc:
                 best_acc = epoch_acc
@@ -151,23 +153,27 @@ def train_model(
 
 
 def load_data_for_model(model):
-    image_size = model.get_image_size()
-    mean, std = model.get_mean_std()
-    test_transform = get_test_transform(image_size, mean, std)
-    data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
-
-    return load_data_imagefolder(
-        train_data_transform=data_transform, test_data_transform=test_transform
-    )
-
-    # return load_data_flofolder()
+    if hp.using_hdf:
+        return load_hdf_data(hp.hdf_key)
+    else:
+        image_size = model.get_image_size()
+        mean, std = model.get_mean_std()
+        test_transform = get_test_transform(image_size, mean, std)
+        data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
+        return load_data_imagefolder(
+            train_data_transform=data_transform, test_data_transform=test_transform
+        )
 
 
 def pre_run():
-    model = get_model(2, 2)
+    model = get_model(2, 1)
     datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
-    criterion = nn.CrossEntropyLoss()
+
+    weights = None
+    if hp.use_class_weights:
+        weights = torch.FloatTensor(hp.class_weights).to(device)
+    criterion = nn.CrossEntropyLoss(weight=weights)
 
     # Find LR first
     logs, losses = find_lr(model, criterion, dataloaders["train"])
@@ -178,14 +184,18 @@ def pre_run():
 
 def run():
     now = datetime.now()
+    print("-------------------------------------")
+    print(f"Now running model: {hp.model_name}")
     print(now.strftime("%A, %d %B at %I:%M %p"))
+    print("-------------------------------------")
     save_loc = hp.model_name + now.strftime("%d%b%I:%M%p")
     save_loc = os.path.join(hp.save_folder, save_loc)
     if not os.path.isdir(save_loc):
         os.mkdir(save_loc)
 
-    torch.save(hp, os.path.join(save_loc, hp.model_name + '-hp.pt'))
-    model = get_model(2, 2)
+    shutil.copy("hp.py", save_loc)
+    torch.save(hp, os.path.join(save_loc, hp.model_name + "-hp.pt"))
+    model = get_model(2, 1)
     datasets, dataloaders = load_data_for_model(model)
 
     print("Classes array (check order)")
@@ -194,6 +204,7 @@ def run():
     model = model.to(device)
     model = load_multi_gpu(model)
 
+    weights = None
     if hp.use_class_weights:
         weights = torch.FloatTensor(hp.class_weights).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights)
@@ -202,15 +213,25 @@ def run():
 
     if hp.use_step_lr:
         scheduler = optim.lr_scheduler.StepLR(optimizer, **hp.step_sched_params)
+    elif hp.use_plateau_lr:
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, **hp.plateau_lr_sched_params
+        )
     elif hp.use_one_cycle_lr:
         scheduler = optim.lr_scheduler.OneCycleLR(
             optimizer, steps_per_epoch=len(dataloaders["train"]), **hp.oc_sched_params
         )
-    model = train_model(
-        model, datasets, dataloaders, criterion, optimizer, scheduler, hp.num_epochs, save_loc
-    )
 
-    torch.save(model.state_dict(), "flow.pt")
+    model = train_model(
+        model,
+        datasets,
+        dataloaders,
+        criterion,
+        optimizer,
+        scheduler,
+        hp.num_epochs,
+        save_loc,
+    )
 
 
 def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=0.98):
