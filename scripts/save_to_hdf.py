@@ -7,15 +7,15 @@ fake_folder = "/home/teh_devs/deepfake/dataset/of/fake"
 real_folder = "/home/teh_devs/deepfake/dataset/of/real"
 
 
-num_fakes = 351653
-num_real = 69144
+num_fakes = 705772
+num_real = 138675
 total = num_fakes + num_real
 print(total)
 
 tmean = np.zeros(2, dtype=np.float64)
 tstd = np.zeros(2, dtype=np.float64)
 
-with h5py.File("/home/teh_devs/usb/three_frame_flow.hdf5", "w") as hdfile:
+with h5py.File("two_frame_flow.hdf5", "w") as hdfile:
     hdfile.create_dataset("flow", shape=(total, 300, 300, 2), dtype=np.float32)
     hdfile.create_dataset("num_fake", shape=(1,), dtype=np.uint32)
     hdfile.create_dataset("num_real", shape=(1,), dtype=np.uint32)
@@ -28,7 +28,7 @@ with h5py.File("/home/teh_devs/usb/three_frame_flow.hdf5", "w") as hdfile:
         for imf in tqdm(sorted(os.listdir(folder)), ncols=0):
             components = imf.split(".")[0].split("_")
             diff = int(components[-1]) - int(components[-2])
-            if diff == 3:
+            if diff == 2:
                 path = os.path.join(folder, imf)
                 with open(path, "rb") as f:
                     magic, = np.fromfile(f, np.float32, count=1)
@@ -55,6 +55,6 @@ with h5py.File("/home/teh_devs/usb/three_frame_flow.hdf5", "w") as hdfile:
 #     for imf in tqdm(sorted(os.listdir(folder)), ncols=0):
 #         components = imf.split(".")[0].split("_")
 #         diff = int(components[-1]) - int(components[-2])
-#         if diff == 3:
+#         if diff == 2:
 #             count += 1
 #     print(count)

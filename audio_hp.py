@@ -15,6 +15,8 @@ class AudioConfig:
     # For above values
     img_w = 512
     img_h = 517
+    mean = -19.88055631
+    std = 14.3063872
 
 
 audio_config = ConstDict(

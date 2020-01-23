@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime
 from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data
-from audio_cnn import get_model
+from models.audio_attention import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import get_image_transform_no_crop_scale, get_test_transform
 import math
@@ -36,7 +36,7 @@ def load_multi_gpu(model):
         # model = nn.parallel.DistributedDataParallel(model)
         model = nn.DataParallel(model)
     else:
-        print("Multiple GPU's not available")
+        print(r"Multiple GPU's not available (╯°□°）╯︵ ┻━┻")
     return model
 
 
@@ -111,12 +111,12 @@ def train_model(
 
             print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
 
-            # If using ReduceLRonPlateau or similar to be called every epoch
             if phase == "test":
                 if hp.use_step_lr:
                     scheduler.step()
-                elif hp.use_plateau_lr:
-                    scheduler.step(epoch_loss)
+            elif hp.use_plateau_lr:
+                # Passing in training loss!
+                scheduler.step(epoch_loss)
 
             if phase == "test" and epoch_acc > best_acc:
                 best_acc = epoch_acc
@@ -166,6 +166,9 @@ def load_data_for_model(model):
 
 
 def pre_run():
+    print("-------------------------------------")
+    print(f"Now Pre-running model: {hp.model_name}")
+    print("-------------------------------------")
     model = get_model(2, 1)
     datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
@@ -209,7 +212,13 @@ def run():
         weights = torch.FloatTensor(hp.class_weights).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights)
 
-    optimizer = optim.AdamW(model.parameters(), lr=hp.lr, weight_decay=hp.weight_decay)
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=hp.lr,
+        betas=hp.betas,
+        weight_decay=hp.weight_decay,
+        amsgrad=hp.amsgrad,
+    )
 
     if hp.use_step_lr:
         scheduler = optim.lr_scheduler.StepLR(optimizer, **hp.step_sched_params)

@@ -2,7 +2,7 @@ from constants import ConstDict
 
 
 class HyperParams:
-    model_name = "audio_base_cnn_step_lr_test_convergence"
+    model_name = "audio_attention_sampling_no_weights_plateau"
     save_folder = "saved_models"
     seed = 420
 
@@ -20,33 +20,35 @@ class HyperParams:
     balanced_sampling = True
 
     # Train
-    num_epochs = 20
+    num_epochs = 100
 
     # Optimizer
-    weight_decay = 0.01
-    lr = 0.01
+    weight_decay = 0.05
+    lr = 0.001
+    betas = (0.9, 0.999)
+    amsgrad = False
 
     # Criterion
     use_class_weights = False
     class_weights = [1, 2]
 
     # Scheduler
-    use_step_lr = True
+    use_step_lr = False
     step_sched_params = {
         "step_size": 10,
         "gamma": 0.1,
         "last_epoch": -1
     }
 
-    use_plateau_lr = False
+    use_plateau_lr = True
     plateau_lr_sched_params = {
         "mode": "min",  # Passing in epoch loss, keep it min
-        "patience": 10,  # Num epochs to ignore before reducing
-        "factor": 0.1,  # How much to redue lr by
-        "verbose": False,
+        "patience": 3,  # Num epochs to ignore before reducing
+        "factor": 0.5,  # How much to redue lr by
+        "verbose": True,
         "threshold": 0.0001,  # Number of decimal places to consider when reducing
         "threshold_mode": "rel",
-        "cooldown": 0,  # After reducing, how many epochs to wait before start monitoring again
+        "cooldown": 10,  # After reducing, how many epochs to wait before start monitoring again
         "min_lr": 0,
         "eps": 1e-08,  # If newlr - oldlr < eps, update is ignored
     }

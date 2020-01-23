@@ -10,17 +10,17 @@ def read_audio(file_path):
         y, sr = librosa.load(file_path, sr=audio_config.sampling_rate)
         trim_y, trim_idx = librosa.effects.trim(y, top_db=audio_config.top_db)  # trim
 
-        if len(trim_y) != tot_samples:
+        if len(trim_y) > tot_samples:
             center = (trim_idx[1] - trim_idx[0]) // 2
             left_idx = max(0, center - tot_samples // 2)
             right_idx = min(len(y), center + tot_samples // 2)
             trim_y = y[left_idx:right_idx]
 
-            if len(trim_y) != tot_samples:
-                print(f"Padding, {file_path}")
-                padding = tot_samples - len(trim_y)
-                offset = padding // 2
-                trim_y = np.pad(trim_y, (offset, padding - offset), "constant")
+        elif len(trim_y) < tot_samples:
+            print(f"Padding, {file_path}")
+            padding = tot_samples - len(trim_y)
+            offset = padding // 2
+            trim_y = np.pad(trim_y, (offset, padding - offset), "constant")
         return trim_y
     except Exception as e:
         print(f"Exception while reading file {e}, {file_path}")
