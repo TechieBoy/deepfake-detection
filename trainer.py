@@ -21,7 +21,7 @@ if not os.path.exists(hp.save_folder):
     os.mkdir(hp.save_folder)
 
 
-writer = SummaryWriter()
+writer = SummaryWriter(logdir=os.path.join('runs', hp.model_name))
 device = torch.device("cuda:0")
 
 # sorted

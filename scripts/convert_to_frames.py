@@ -8,7 +8,8 @@ from PIL import Image
 import pickle
 from face_detection import RetinaFace
 from bisect import bisect_left
-from collections import defaultdict
+from collections import Counter
+import math
 
 def delete_folders():
     """Deletes the frames folder from each directory in folder_list"""
@@ -176,60 +177,88 @@ def load_model(device):
     return detector
 
 
-def mtcnn_detect(detector, frames):
-    areas = set()
-    face_count = Counter()
-    def closest(area, area_set):
-        """
-        Assumes myList is sorted. Returns closest value to myNumber.
+def mtcnn_detect(detector, frames, path, vid_name):
+    data = []
+    def get_dist(px,py,x,y):
+        return abs(px - x) + abs(py - y)
+    
+    def get_min_coords(s, x,y):
+        min_set = max(s, key=lambda k:get_dist(k[0], k[1], x,y))
+        return min_set[0], min_set[1], min_set[2]
 
-        If two numbers are equally close, return the smallest number.
-        """
-        myList = sorted(area_set)
-        myNumber = area
-        pos = bisect_left(myList, myNumber)
-        if pos == 0:
-            return myList[0]
-        if pos == len(myList):
-            return myList[-1]
-        before = myList[pos - 1]
-        after = myList[pos]
-        if after - myNumber < myNumber - before:
-            return after
+    def get_avg_coords(s):
+        x,y = 0.0,0.0
+        for dd in s:
+            px,py,*rest = dd
+            x += px
+            y += py
+        tot = len(s)
+        return x/tot, y/tot
+
+    def add_to_closest_set(x,y,area,bi,bj):
+        min_dist = float('inf')
+        idx = -1
+        for i, s in enumerate(data):
+            px,py,pa = get_min_coords(s,x,y)
+            dist = get_dist(px,py,x,y)
+            areas = sorted([pa, area])
+            if dist > 175 or (areas[1] / areas[0]) > 1.3:
+                continue
+            if dist < min_dist:
+                dist = min_dist
+                idx = i
+
+        if idx == -1:
+            stuff = (x,y,area,bi,bj,)
+            ss = set()
+            ss.add(stuff)
+            data.append(ss)
         else:
-            return before
+            data[idx].add((x,y,area,bi,bj,))
 
+
+    stored_frames = []
+    def get_box(face_box, shape, padding=15):
+        (startX, startY) = int(face_box[0]), int(face_box[1])
+        (endX, endY) = int(face_box[2]), int(face_box[3])
+        height, width, _ = shape
+
+        y_top = max(startY - padding, 0)
+        x_top = max(startX - padding, 0)
+        y_bot = min(endY + padding, height)
+        x_bot = min(endX + padding, width)
+
+        return y_top, y_bot, x_top, x_bot
+    
     frames_boxes, frames_confidences = detector.detect([Image.fromarray(x) for x in frames], landmarks=False)
     for batch_idx, (frame_boxes, frame_confidences) in enumerate(zip(frames_boxes, frames_confidences)):
         frame = frames[batch_idx]
+        stored_frames.append(frame_boxes)
         if (frame_boxes is not None) and (len(frame_boxes) > 0):
             frame_locations = []
-            for j, (face_box, confidence) in enumerate(zip(frame_boxes, frame_confidences), 0):
-                (x, y, w, h) = (
-                    int(face_box[0]),
-                    int(face_box[1]),
-                    int(face_box[2] - face_box[0]),
-                    int(face_box[3] - face_box[1]),
-                )
-                print(x,y)
-                area = w * h
-                if not areas:
-                    areas.add(area)
-                    face_count.update(area)
+            for j, (face_box, confidence) in enumerate(zip(frame_boxes, frame_confidences)):
+                (y, yb, x, xb) = get_box(face_box, frame.shape, 0)
+                area = (yb - y) * (xb - x)
+                if not data:
+                    stuff = (x,y,area,batch_idx,j,)
+                    ss = set()
+                    ss.add(stuff)
+                    data.append(ss)
                 else:
-                    old_area = closest(area, areas)
-                    now = sorted([old_area, area])
-                    if now[1] / now[0] >= 1.15:
-                        areas.add(area)
-                        face_count.update(area)
-                    else:
-                        areas.remove(old_area)
-                        old_count = face_count[old_area]
-                        del face_count[old_area]
-                        areas.add(area)
-                        face_count[area] = old_count + 1
+                    add_to_closest_set(x,y,area,batch_idx,j)
 
-                face_extract = frame[y : y + h, x : x + w]
+    count = 0
+    for i, d in enumerate(data):
+        if len(d) > 9:
+            for f in d:
+                rx,ry,area,i,j = f
+                frame = frames[i]
+                box = stored_frames[i][j]
+                (y, yb, x, xb) = get_box(box, frame.shape, 10)
+                face_extract = frame[y : yb, x : xb]
+                pa = f'{path}/{vid_name}_{len(d)}_{count}.png'
+                cv2.imwrite(pa,cv2.cvtColor(face_extract, cv2.COLOR_RGB2BGR))
+                count += 1
 
 
 def convert_video_to_frames_per_frame(capture, per_n):
@@ -238,11 +267,11 @@ def convert_video_to_frames_per_frame(capture, per_n):
     for i in range(0, num_frames):
         ret = capture.grab()
         if i % per_n == 0:
-            ret, frame = capture.retrieve()
+            ret, image = capture.retrieve()
             if ret:
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 height, width, channels = image.shape
                 image = cv2.resize(image, (width // 2, height // 2), interpolation=cv2.INTER_AREA)
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 frames.append(image)
     return frames
 
@@ -289,14 +318,31 @@ def convert_video_to_frames_with_mtcnn(detector, base_folder, folder):
 
 if __name__ == "__main__":
     # base_folder = "/home/teh_devs/deepfake/raw/test_vids"
-
-    # print("Doing 15 to 20 folders")
-    # for i in range(15, 20):
-    #     folder_list.append(f"/home/teh_devs/deepfake/raw/dfdc_train_part_{i}")
-
+    """
+    Rescaled by 4 need testing
+    """
+    from glob import glob
+    storage_dir = '/home/teh_devs/deepfake/dataset/revamp'
+    folder_list = []
+    print("Doing first 5 folders")
+    for i in range(0, 5):
+        folder_list.append(f"/home/teh_devs/deepfake/raw/dfdc_train_part_{i}")
+    
     detector = load_model(device="cuda:0")
-    capture = cv2.VideoCapture('/home/teh_devs/deepfake/raw/dfdc_train_part_4/srqogltgnx.mp4')
-    frames = convert_video_to_frames_per_frame(capture, 5)
-    mtcnn_detect(detector, frames)
+    # f = '/home/teh_devs/deepfake/raw/dfdc_train_part_4/srqogltgnx.mp4'
+    for f in folder_list:
+        print(f)
+        videos = glob(f + '/*.mp4')
+        for vid in tqdm(videos, ncols=0):
+            try:
+                vid_name = vid.split('/')[-1].split('.')[0]
+                capture = cv2.VideoCapture(vid)
+                frames = convert_video_to_frames_per_frame(capture, 10)
+                new_folder = os.path.join(storage_dir, vid_name)
+                os.mkdir(new_folder)
+                mtcnn_detect(detector, frames, new_folder, vid_name)
+                capture.release()
+            except Exception as e:
+                print(e)
     # for f in folder_list:
     #     convert_video_to_frames_with_mtcnn(detector, base_folder, f)
