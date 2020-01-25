@@ -1,5 +1,15 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+class Mish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        x = x * (torch.tanh(F.softplus(x)))
+        return x
 
 
 class MesoInception4(nn.Module):
@@ -28,6 +38,7 @@ class MesoInception4(nn.Module):
 
         # Normal Layer
         self.conv1 = nn.Conv2d(12, 16, 5, padding=2, bias=False)
+        self.mish = Mish()
         self.relu = nn.ReLU(inplace=True)
         self.leakyrelu = nn.LeakyReLU(0.1)
         self.bn1 = nn.BatchNorm2d(16)
@@ -74,19 +85,22 @@ class MesoInception4(nn.Module):
         x = self.InceptionLayer2(x)  # (Batch, 12, 64, 64)
 
         x = self.conv1(x)  # (Batch, 16, 64 ,64)
-        x = self.relu(x)
+        x = self.mish(x)
+        # x = self.relu(x)
         x = self.bn1(x)
         x = self.maxpooling1(x)  # (Batch, 16, 32, 32)
 
         x = self.conv2(x)  # (Batch, 16, 32, 32)
-        x = self.relu(x)
+        x = self.mish(x)
+        # x = self.relu(x)
         x = self.bn1(x)
         x = self.maxpooling2(x)  # (Batch, 16, 8, 8)
 
         x = x.view(x.size(0), -1)  # (Batch, 16*8*8)
         x = self.dropout(x)
         x = self.fc1(x)  # (Batch, 16)
-        x = self.leakyrelu(x)
+        x = self.mish(x)
+        # x = self.leakyrelu(x)
         x = self.dropout(x)
         x = self.fc2(x)
 
