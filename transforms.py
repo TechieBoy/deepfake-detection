@@ -75,7 +75,6 @@ def train_albumentations(image_size, mean, std):
                 CenterCrop(30, 30, p=0.5),
                 Downscale(p=0.5)
             ],p=1),
-            Resize(*image_size, interpolation=cv2.INTER_AREA),
             Rotate(limit=8, p=0.4),
             HorizontalFlip(p=0.4),
             JpegCompression(quality_lower=25, quality_upper=65, p=0.4),
@@ -86,6 +85,7 @@ def train_albumentations(image_size, mean, std):
             ChannelShuffle(p=0.1),
             OneOf([IAAAdditiveGaussianNoise(), GaussNoise()], p=0.4),
             InvertImg(p=0.1),
+            Resize(*image_size, interpolation=cv2.INTER_AREA),
             Normalize(mean=mean, std=std),
             ToTensorV2()
         ]
