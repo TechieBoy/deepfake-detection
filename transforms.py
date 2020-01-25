@@ -1,6 +1,8 @@
 from albumentations import (
     Compose,
     OneOf,
+    CenterCrop,
+    Downscale,
     IAAAdditiveGaussianNoise,
     GaussNoise,
     Normalize,
@@ -62,20 +64,30 @@ def get_image_transform_no_crop_scale(image_size, mean, std):
 def get_test_transform(image_size, mean, std):
     return transforms.Compose([transforms.Resize(image_size), transforms.ToTensor(), transforms.Normalize(mean, std)])
 
+def get_test_transform_albumentations(image_size, mean, std):
+    return Compose([Resize(*image_size, interpolation=cv2.INTER_AREA), Normalize(mean=mean, std=std),ToTensorV2()])
 
-def strong_aug(p=0.5):
+
+def train_albumentations(image_size, mean, std):
     return Compose(
         [
-            RandomRotate90(),
-            Flip(),
-            Transpose(),
-            OneOf([IAAAdditiveGaussianNoise(), GaussNoise()], p=0.2),
-            OneOf([MotionBlur(p=0.2), MedianBlur(blur_limit=3, p=0.1), Blur(blur_limit=3, p=0.1)], p=0.2),
-            ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=0.2),
-            OneOf([OpticalDistortion(p=0.3), GridDistortion(p=0.1), IAAPiecewiseAffine(p=0.3)], p=0.2),
-            OneOf([CLAHE(clip_limit=2), IAASharpen(), IAAEmboss(), RandomBrightnessContrast()], p=0.3),
-            HueSaturationValue(p=0.3),
-        ],
-        p=p,
+            OneOf([
+                CenterCrop(30, 30, p=0.5),
+                Downscale(p=0.5)
+            ],p=1),
+            Resize(*image_size, interpolation=cv2.INTER_AREA),
+            Rotate(limit=8, p=0.4),
+            HorizontalFlip(p=0.4),
+            JpegCompression(quality_lower=25, quality_upper=65, p=0.4),
+            RandomBrightnessContrast(brightness_limit=(0.9, 1.2), contrast_limit=(0.9, 1.2), p=0.4),
+            RGBShift(p=0.4),
+            RandomGamma(p=0.4),
+            HueSaturationValue(p=0.4),
+            ChannelShuffle(p=0.1),
+            OneOf([IAAAdditiveGaussianNoise(), GaussNoise()], p=0.4),
+            InvertImg(p=0.1),
+            Normalize(mean=mean, std=std),
+            ToTensorV2()
+        ]
     )
 

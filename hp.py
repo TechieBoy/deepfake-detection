@@ -2,19 +2,34 @@ from constants import ConstDict
 
 
 class HyperParams:
-    model_name = "audio_attention_sampling_no_weights_plateau"
+    model_name = "split_test"
     save_folder = "saved_models"
     seed = 420
 
     # Data
-    using_hdf = True
+    
+    # HDF
+    using_hdf = False
     hdf_key = "audio"
-    data_dir = 'audio.hdf5'
+    
+    # Splits
+    using_split = True
+    split_csv = "/home/teh_devs/deepfake/dataset/fake-real-distinct.csv"
+    per = 5000
+    train_idx_list = [(1,1,1)]
+    test_idx_list = [(3,3,1)]
+    split_seed = 50
+    
+    shuffle_fake = False
+    shuffle_fake_seed = 50
+    
+    
+    data_dir = '/home/teh_devs/deepfake/dataset/revamp'
     using_augments = False
     use_pinned_memory_train = True
     use_pinned_memory_test = True
-    test_batch_size = 40
-    train_batch_size = 40
+    test_batch_size = 120
+    train_batch_size = 120
     data_num_workers = 30
     test_split_percent = 0.1
     balanced_sampling = True

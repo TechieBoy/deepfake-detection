@@ -7,10 +7,10 @@ import os
 import shutil
 from datetime import datetime
 from tqdm import tqdm
-from load_data import load_data_imagefolder, load_hdf_data
-from models.audio_attention import get_model
+from load_data import load_data_imagefolder, load_hdf_data, load_split_data
+from models.xception import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
-from transforms import get_image_transform_no_crop_scale, get_test_transform
+from transforms import get_image_transform_no_crop_scale, get_test_transform, train_albumentations, get_test_transform_albumentations
 import math
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
@@ -21,7 +21,7 @@ if not os.path.exists(hp.save_folder):
     os.mkdir(hp.save_folder)
 
 
-writer = SummaryWriter(logdir=os.path.join('runs', hp.model_name))
+writer = SummaryWriter(os.path.join('runs', hp.model_name))
 device = torch.device("cuda:0")
 
 # sorted
@@ -155,6 +155,12 @@ def train_model(
 def load_data_for_model(model):
     if hp.using_hdf:
         return load_hdf_data(hp.hdf_key)
+    elif hp.using_split:
+        image_size = model.get_image_size()
+        mean, std = model.get_mean_std()
+        train_data_transform = train_albumentations(image_size, mean, std)
+        test_data_transform = get_test_transform_albumentations(image_size, mean, std)
+        return load_split_data(train_data_transform, test_data_transform)
     else:
         image_size = model.get_image_size()
         mean, std = model.get_mean_std()
@@ -198,7 +204,7 @@ def run():
 
     shutil.copy("hp.py", save_loc)
     torch.save(hp, os.path.join(save_loc, hp.model_name + "-hp.pt"))
-    model = get_model(2, 1)
+    model = get_model(2)
     datasets, dataloaders = load_data_for_model(model)
 
     print("Classes array (check order)")

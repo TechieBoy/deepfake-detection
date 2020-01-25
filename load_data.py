@@ -6,9 +6,12 @@ from torch.utils.data import Subset, DataLoader
 from glob import glob
 import pandas as pd
 import os
+import random
+import math
 import copy
 import h5py
 from hp import hp
+import cv2
 
 
 def load_data_imagefolder(train_data_transform, test_data_transform):
@@ -20,10 +23,7 @@ def load_data_imagefolder(train_data_transform, test_data_transform):
     dataset_size = len(img_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
-        indices,
-        random_state=hp.seed,
-        test_size=hp.test_split_percent,
-        stratify=img_dataset.targets,
+        indices, random_state=hp.seed, test_size=hp.test_split_percent, stratify=img_dataset.targets
     )
 
     test_img_dataset = copy.deepcopy(img_dataset)
@@ -33,9 +33,7 @@ def load_data_imagefolder(train_data_transform, test_data_transform):
     test_dataset = Subset(test_img_dataset, test_indices)
 
     if hp.balanced_sampling:
-        weights = make_weights_for_balanced_classes(
-            img_dataset.targets, train_indices, len(img_dataset.classes)
-        )
+        weights = make_weights_for_balanced_classes(img_dataset.targets, train_indices, len(img_dataset.classes))
         weights = torch.DoubleTensor(weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     else:
@@ -73,19 +71,14 @@ def load_hdf_data(key):
     dataset_size = len(flo_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
-        indices,
-        random_state=hp.seed,
-        test_size=hp.test_split_percent,
-        stratify=flo_dataset.targets,
+        indices, random_state=hp.seed, test_size=hp.test_split_percent, stratify=flo_dataset.targets
     )
 
     train_dataset = Subset(flo_dataset, train_indices)
     test_dataset = Subset(flo_dataset, test_indices)
 
     if hp.balanced_sampling:
-        weights = make_weights_for_balanced_classes(
-            flo_dataset.targets, train_indices, len(flo_dataset.classes)
-        )
+        weights = make_weights_for_balanced_classes(flo_dataset.targets, train_indices, len(flo_dataset.classes))
         weights = torch.DoubleTensor(weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     else:
@@ -111,6 +104,111 @@ def load_hdf_data(key):
     dataloaders = {"train": train_loader, "test": test_loader}
     print("Done loading data")
     return dataset_dict, dataloaders
+
+
+def get_array_in_batch(arr, shuffle=False, seed=50, per=5000):
+    if shuffle:
+        random.seed(seed)
+        random.shuffle(arr)
+    div = math.ceil(len(arr) / per)
+    batched = []
+    for i in range(div):
+        batched.append(arr[i * per : (i + 1) * per])
+    return div, batched
+
+
+def get_split_df(seed=50, per=5000):
+    df = pd.read_csv(hp.split_csv)
+    df = df[((df.video_label == "FAKE") | (df.video_label == "REAL")) & (df.audio_label == "REAL")]
+    dff = df[(df.video_label == "FAKE")]
+    df_reals = df[(df.video_label == "REAL")].filename.to_list()
+    div, reals = get_array_in_batch(df_reals, shuffle=True, seed=seed, per=per)
+    fakes = [[] for _ in range(div)]
+
+    grouped = dff.groupby(dff.original)
+    removed = []
+    for i, rr in enumerate(reals):
+        for r in rr:
+            try:
+                fakes[i].extend(grouped.get_group(r).filename.to_list())
+            except KeyError:
+                removed.append(r)
+    return fakes, reals, removed
+
+
+def load_split_data(train_data_transform, test_data_transform):
+    root = hp.data_dir
+    fakes, reals, removed = get_split_df(hp.split_seed, hp.per)
+    total_train_reals = []
+    total_train_fakes = []
+    total_test_reals = []
+    total_test_fakes = []
+
+    def create_full_list(idxlist, total_real, total_fake):
+        for ri, fi, fsi in idxlist:
+            total_real.extend(reals[ri])
+            div, batched_fake = get_array_in_batch(fakes[fi], hp.shuffle_fake, hp.shuffle_fake_seed, hp.per)
+            total_fake.extend(batched_fake[fsi])
+
+    create_full_list(hp.train_idx_list, total_train_reals, total_train_fakes)
+    create_full_list(hp.test_idx_list, total_test_reals, total_test_fakes)
+    print("Train")
+    train_dataset = SplitDataset(root, total_train_fakes, total_train_reals, train_data_transform)
+    print("Test")
+    test_dataset = SplitDataset(root, total_test_fakes, total_test_reals, test_data_transform)
+
+    train_loader = DataLoader(
+        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        shuffle=False,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.test_batch_size,
+        pin_memory=hp.use_pinned_memory_test,
+    )
+
+    dataset_dict = {"train": train_dataset, "test": test_dataset}
+    dataloaders = {"train": train_loader, "test": test_loader}
+    return dataset_dict, dataloaders
+
+
+class SplitDataset(torch.utils.data.Dataset):
+    def __init__(self, root, fakes, reals, transform=None):
+        super(SplitDataset, self).__init__()
+        self.transform = transform
+        self.class_to_idx = {"fake": 0, "real": 1}
+        self.samples = self.make_dataset(root, reals, 1)
+        print("real", len(self.samples))
+        fake_samples = self.make_dataset(root, fakes, 0)
+        print("fake", len(fake_samples))
+        self.samples.extend(fake_samples)
+
+    def __getitem__(self, index):
+        sample = self.samples[index]
+        image = cv2.imread(sample[0])
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if self.transform:
+            augmented = self.transform(image=image)
+            image = augmented["image"]
+        return image, sample[1]
+
+    def __len__(self):
+        return len(self.samples)
+
+    def make_dataset(self, root, folders, target):
+        sample_list = []
+        for f in folders:
+            f = f.split(".")[0]
+            ff = os.path.join(root, f)
+            if os.path.isdir(ff):
+                images = os.listdir(ff)
+                for img in images:
+                    img_path = os.path.join(ff, img)
+                    sample_list.append((img_path, target))
+        return sample_list
 
 
 class FloDataset(torch.utils.data.Dataset):
@@ -203,9 +301,7 @@ class HDFDataset(torch.utils.data.Dataset):
 
         self.classes = ["fake", "real"]
         self.class_to_idx = {"fake": 0, "real": 1}
-        self.targets = [0 for _ in range(self.num_fake)] + [
-            1 for _ in range(self.num_real)
-        ]
+        self.targets = [0 for _ in range(self.num_fake)] + [1 for _ in range(self.num_real)]
 
     def __getitem__(self, index):
         if index >= self.num_fake:
