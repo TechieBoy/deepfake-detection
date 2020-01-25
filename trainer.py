@@ -175,7 +175,7 @@ def pre_run():
     print("-------------------------------------")
     print(f"Now Pre-running model: {hp.model_name}")
     print("-------------------------------------")
-    model = get_model(2, 1)
+    model = get_model(2)
     datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
 
@@ -249,7 +249,7 @@ def run():
     )
 
 
-def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=0.98):
+def find_lr(net, criterion, trn_loader, init_value=1e-6, final_value=10.0, beta=0.98):
     """
     https://sgugger.github.io/how-do-you-find-a-good-learning-rate.html
     https://sgugger.github.io/the-1cycle-policy.html
@@ -305,5 +305,5 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    run()
+    pre_run()
     writer.close()

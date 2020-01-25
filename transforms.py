@@ -2,6 +2,7 @@ from albumentations import (
     Compose,
     OneOf,
     CenterCrop,
+    PadIfNeeded,
     Downscale,
     IAAAdditiveGaussianNoise,
     GaussNoise,
@@ -72,11 +73,11 @@ def train_albumentations(image_size, mean, std):
     return Compose(
         [
             OneOf([
-                CenterCrop(30, 30, p=0.5),
+                Compose([PadIfNeeded(50, 50, p=1), CenterCrop(30, 30, p=1)], p=0.5),
                 Downscale(p=0.5)
             ],p=1),
             Rotate(limit=8, p=0.4),
-            HorizontalFlip(p=0.4),
+            HorizontalFlip(p=0.6),
             JpegCompression(quality_lower=25, quality_upper=65, p=0.4),
             RandomBrightnessContrast(brightness_limit=(0.9, 1.2), contrast_limit=(0.9, 1.2), p=0.4),
             RGBShift(p=0.4),
