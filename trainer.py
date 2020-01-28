@@ -10,7 +10,12 @@ from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data, load_split_data
 from models.efficientnet import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
-from transforms import get_image_transform_no_crop_scale, get_test_transform, train_albumentations, get_test_transform_albumentations
+from transforms import (
+    get_image_transform_no_crop_scale,
+    get_test_transform,
+    train_albumentations,
+    get_test_transform_albumentations,
+)
 import math
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
@@ -21,7 +26,7 @@ if not os.path.exists(hp.save_folder):
     os.mkdir(hp.save_folder)
 
 
-writer = SummaryWriter(os.path.join('runs', hp.model_name))
+writer = SummaryWriter(os.path.join("runs", hp.model_name))
 device = torch.device("cuda:0")
 
 # sorted
@@ -49,6 +54,11 @@ def train_model(
     n_iter = 0
 
     for epoch in range(num_epochs):
+        if hp.use_cos_anneal_restart:
+            optimizer = optim.SGD(model.parameters(), **hp.sgd_params)
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=len(dataloaders["train"]), **hp.cos_anneal_sched_params
+            )
         print(f"Epoch {epoch + 1}/{num_epochs}")
         print("-" * 10)
 
@@ -218,13 +228,12 @@ def run():
         weights = torch.FloatTensor(hp.class_weights).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights)
 
-    optimizer = optim.AdamW(
-        model.parameters(),
-        lr=hp.lr,
-        betas=hp.betas,
-        weight_decay=hp.weight_decay,
-        amsgrad=hp.amsgrad,
-    )
+    if hp.use_adamW:
+        optimizer = optim.AdamW(model.parameters(), **hp.adamW_params)
+    elif hp.use_sgd:
+        optimizer = optim.SGD(model.parameters(), **hp.sgd_params)
+    else:
+        optimizer = None
 
     if hp.use_step_lr:
         scheduler = optim.lr_scheduler.StepLR(optimizer, **hp.step_sched_params)
@@ -236,6 +245,8 @@ def run():
         scheduler = optim.lr_scheduler.OneCycleLR(
             optimizer, steps_per_epoch=len(dataloaders["train"]), **hp.oc_sched_params
         )
+    else:
+        scheduler = None
 
     model = train_model(
         model,
@@ -258,6 +269,13 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
     For a OneCycleLR, The maximum should be the value picked with the Learning Rate Finder, and the lower one can be ten times lower.
     """
     optimizer = optim.SGD(net.parameters(), lr=1e-1)
+    # optimizer = optim.AdamW(
+    #     net.parameters(),
+    #     lr=1e-8,
+    #     betas=hp.betas,
+    #     weight_decay=hp.weight_decay,
+    #     amsgrad=hp.amsgrad,
+    # )
     num = len(trn_loader) - 1
     mult = (final_value / init_value) ** (1 / num)
     lr = init_value
@@ -305,5 +323,5 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    pre_run()
+    run()
     writer.close()

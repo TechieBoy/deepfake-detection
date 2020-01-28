@@ -16,8 +16,8 @@ class HyperParams:
     using_split = True
     split_csv = "/home/teh_devs/deepfake/dataset/fake-real-distinct.csv"
     per = 5000
-    train_idx_list = [(1, 1, 1)]
-    test_idx_list = [(2, 2, 1)]
+    train_idx_list = [(1, 1, 0)]
+    test_idx_list = [(2, 2, 0)]
     split_seed = 50
     shuffle_fake = False
     shuffle_fake_seed = 50
@@ -26,8 +26,8 @@ class HyperParams:
     using_augments = False
     use_pinned_memory_train = True
     use_pinned_memory_test = True
-    test_batch_size = 40
-    train_batch_size = 40
+    test_batch_size = 48
+    train_batch_size = 48
     data_num_workers = 30
     test_split_percent = 0.1
     balanced_sampling = True
@@ -36,10 +36,11 @@ class HyperParams:
     num_epochs = 10
 
     # Optimizer
-    weight_decay = 0.001
-    lr = 0.00005
-    betas = (0.9, 0.999)
-    amsgrad = False
+    use_adamW = False
+    adamW_params = dict(weight_decay=0.001, lr=2e-4, betas=(0.9, 0.999), amsgrad=False)
+
+    use_sgd = True
+    sgd_params = dict(lr=0.00063, momentum=0.9, dampening=0, weight_decay=0.001, nesterov=False)
 
     # Criterion
     use_class_weights = False
@@ -52,17 +53,17 @@ class HyperParams:
     use_plateau_lr = False
     plateau_lr_sched_params = {
         "mode": "min",  # Passing in epoch loss, keep it min
-        "patience": 3,  # Num epochs to ignore before reducing
+        "patience": 1,  # Num epochs to ignore before reducing
         "factor": 0.5,  # How much to redue lr by
         "verbose": True,
         "threshold": 0.0001,  # Number of decimal places to consider when reducing
         "threshold_mode": "rel",
-        "cooldown": 10,  # After reducing, how many epochs to wait before start monitoring again
+        "cooldown": 1,  # After reducing, how many epochs to wait before start monitoring again
         "min_lr": 0,
         "eps": 1e-08,  # If newlr - oldlr < eps, update is ignored
     }
 
-    use_one_cycle_lr = True
+    use_one_cycle_lr = False
     oc_sched_params = {
         "max_lr": 0.00005,
         "div_factor": 100.0,  # initial_lr = max_lr/div_factor
@@ -73,6 +74,12 @@ class HyperParams:
         "base_momentum": 0.85,
         "max_momentum": 0.95,
         "last_epoch": -1,  # Change this if resuming (Pass in total number of batches done, not epochs!!)
+    }
+
+    use_cos_anneal_restart = True
+    cos_anneal_sched_params = {
+        "eta_min": 0.0017,  # Minimum Learning rate
+        "last_epoch": -1
     }
 
 
