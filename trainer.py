@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime
 from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data, load_split_data
-from models.efficientnet import get_model
+from models.xception import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
     get_image_transform_no_crop_scale,
@@ -54,6 +54,7 @@ def train_model(
     n_iter = 0
 
     for epoch in range(num_epochs):
+        
         if hp.use_cos_anneal_restart:
             optimizer = optim.SGD(model.parameters(), **hp.sgd_params)
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -61,6 +62,7 @@ def train_model(
             )
         print(f"Epoch {epoch + 1}/{num_epochs}")
         print("-" * 10)
+        print("LR", optimizer.param_groups[0]["lr"])
 
         probabilites = torch.zeros(0, dtype=torch.float32, device="cpu")
         predictions = torch.zeros(0, dtype=torch.long, device="cpu")
@@ -98,7 +100,7 @@ def train_model(
                     if phase == "train":
                         loss.backward()
                         optimizer.step()
-                        if hp.use_one_cycle_lr:
+                        if hp.use_one_cycle_lr or hp.use_cos_anneal_restart:
                             scheduler.step()
                     else:
                         # Softmax and calculate metrics
@@ -268,14 +270,10 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
     plt.plot(logs,losses)
     For a OneCycleLR, The maximum should be the value picked with the Learning Rate Finder, and the lower one can be ten times lower.
     """
-    optimizer = optim.SGD(net.parameters(), lr=1e-1)
-    # optimizer = optim.AdamW(
-    #     net.parameters(),
-    #     lr=1e-8,
-    #     betas=hp.betas,
-    #     weight_decay=hp.weight_decay,
-    #     amsgrad=hp.amsgrad,
-    # )
+    if hp.use_adamW:
+        optimizer = optim.AdamW(net.parameters(), **hp.adamW_params)
+    elif hp.use_sgd:
+        optimizer = optim.SGD(net.parameters(), **hp.sgd_params)
     num = len(trn_loader) - 1
     mult = (final_value / init_value) ** (1 / num)
     lr = init_value
@@ -323,5 +321,5 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    run()
+    pre_run()
     writer.close()

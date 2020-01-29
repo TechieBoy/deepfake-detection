@@ -658,7 +658,7 @@ class EfficientNet(nn.Module):
         return model
 
     def get_image_size(self):
-        return (380, 380)
+        return (240, 240)
 
     def get_mean_std(self):
         return ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -673,7 +673,6 @@ class EfficientNet(nn.Module):
 
 def get_model(num_classes, in_channels=3):
     model = EfficientNet.from_pretrained(
-        "efficientnet-b4", num_classes=num_classes, in_channels=in_channels
+        "efficientnet-b1", num_classes=num_classes, in_channels=in_channels
     )
     return model
-
