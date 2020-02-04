@@ -106,6 +106,35 @@ def load_hdf_data(key):
     return dataset_dict, dataloaders
 
 
+def load_fwa_data(train_data_transform, test_data_transform):
+    print("Loading data")
+    np.random.seed(hp.seed)
+    torch.manual_seed(hp.seed)
+    random.seed(hp.seed)
+
+    train_dataset = FWADataset(hp.real_folder_loc, hp.fake_loc, "train", hp.seed, hp.test_split_percent, train_data_transform)
+    test_dataset = FWADataset(hp.real_folder_loc, hp.fake_loc, "test", hp.seed, hp.test_split_percent, test_data_transform)
+
+    train_loader = DataLoader(
+        train_dataset,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.train_batch_size,
+        pin_memory=hp.use_pinned_memory_train,
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.test_batch_size,
+        pin_memory=hp.use_pinned_memory_test,
+    )
+
+    dataset_dict = {"train": train_dataset, "test": test_dataset}
+    dataloaders = {"train": train_loader, "test": test_loader}
+    print("Done loading data")
+    return dataset_dict, dataloaders
+
+
 def get_array_in_batch(arr, shuffle=False, seed=50, per=5000):
     if shuffle:
         random.seed(seed)
@@ -172,6 +201,51 @@ def load_split_data(train_data_transform, test_data_transform):
     dataset_dict = {"train": train_dataset, "test": test_dataset}
     dataloaders = {"train": train_loader, "test": test_loader}
     return dataset_dict, dataloaders
+
+
+class FWADataset(torch.utils.data.Dataset):
+    def __init__(self, real_folder_loc, fake_loc, mode, seed, percent, transform=None):
+        super(FWADataset, self).__init__()
+        self.transform = transform
+        self.class_to_idx = {"fake": 0, "real": 1}
+        self.mode = mode
+        self.percent = percent
+        self.seed = seed
+        self.samples = self.make_dataset(real_folder_loc, fake_loc)
+
+    def __getitem__(self, index):
+        sample = self.samples[index]
+        image = cv2.imread(sample[0])
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if self.transform:
+            augmented = self.transform(image=image)
+            image = augmented["image"]
+        return image, sample[1]
+
+    def __len__(self):
+        return len(self.samples)
+
+    def make_dataset(self, real_folder_loc, fake_loc):
+        sample_list = []
+        fake_imgs = os.listdir(fake_loc)
+        random.seed(self.seed)
+        random.shuffle(fake_imgs)
+        loc = round(self.percent * len(fake_imgs))
+        if self.mode == 'train':
+            fake_imgs = fake_imgs[loc:]
+        elif self.mode == 'test':
+            fake_imgs = fake_imgs[:loc]
+        else:
+            raise RuntimeError("Invalid Mode")
+        print(f'{self.mode} {len(fake_imgs)}')
+        for img in fake_imgs:
+            fake_path = os.path.join(fake_loc, img)
+            sample_list.append((fake_path, self.class_to_idx["fake"]))
+            real_folder_name = img[:10]
+            real_path = os.path.join(real_folder_loc, real_folder_name, img)
+            sample_list.append((real_path, self.class_to_idx["real"]))
+        return sample_list
 
 
 class SplitDataset(torch.utils.data.Dataset):

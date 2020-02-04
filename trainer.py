@@ -7,8 +7,8 @@ import os
 import shutil
 from datetime import datetime
 from tqdm import tqdm
-from load_data import load_data_imagefolder, load_hdf_data, load_split_data
-from models.xception import get_model
+from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data
+from models.sppnet import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
     get_image_transform_no_crop_scale,
@@ -165,17 +165,19 @@ def train_model(
 
 
 def load_data_for_model(model):
+    image_size = model.get_image_size()
+    mean, std = model.get_mean_std()
     if hp.using_hdf:
         return load_hdf_data(hp.hdf_key)
     elif hp.using_split:
-        image_size = model.get_image_size()
-        mean, std = model.get_mean_std()
         train_data_transform = train_albumentations(image_size, mean, std)
         test_data_transform = get_test_transform_albumentations(image_size, mean, std)
         return load_split_data(train_data_transform, test_data_transform)
+    elif hp.using_fwa:
+        train_data_transform = train_albumentations(image_size, mean, std)
+        test_data_transform = get_test_transform_albumentations(image_size, mean, std)
+        return load_fwa_data(test_data_transform, test_data_transform)
     else:
-        image_size = model.get_image_size()
-        mean, std = model.get_mean_std()
         test_transform = get_test_transform(image_size, mean, std)
         data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
         return load_data_imagefolder(
@@ -321,5 +323,5 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    pre_run()
+    run()
     writer.close()
