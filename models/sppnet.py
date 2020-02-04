@@ -93,4 +93,6 @@ def get_model(num_classes=2, pretrained=True):
         for parameter in model.named_parameters():
             if parameter[0].startswith('resnet.resnet'):
                 parameter[1].requires_grad = False
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of trainable parameters is {pytorch_total_params}")
     return model
