@@ -36,12 +36,15 @@ def load_data_imagefolder(train_data_transform, test_data_transform):
         weights = make_weights_for_balanced_classes(img_dataset.targets, train_indices, len(img_dataset.classes))
         weights = torch.DoubleTensor(weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+        train_shuffle = False
     else:
         sampler = None
+        train_shuffle = True
 
     train_loader = DataLoader(
         train_dataset,
         sampler=sampler,
+        shuffle=train_shuffle,
         num_workers=hp.data_num_workers,
         batch_size=hp.train_batch_size,
         pin_memory=hp.use_pinned_memory_train,
@@ -81,12 +84,15 @@ def load_hdf_data(key):
         weights = make_weights_for_balanced_classes(flo_dataset.targets, train_indices, len(flo_dataset.classes))
         weights = torch.DoubleTensor(weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
+        train_shuffle = False
     else:
         sampler = None
+        train_shuffle = True
 
     train_loader = DataLoader(
         train_dataset,
         sampler=sampler,
+        shuffle=train_shuffle,
         num_workers=hp.data_num_workers,
         batch_size=hp.train_batch_size,
         pin_memory=hp.use_pinned_memory_train,
@@ -116,7 +122,11 @@ def load_fwa_data(train_data_transform, test_data_transform):
     test_dataset = FWADataset(hp.real_folder_loc, hp.fake_loc, "test", hp.seed, hp.test_split_percent, test_data_transform)
 
     train_loader = DataLoader(
-        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
+        train_dataset,
+        shuffle=True,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.train_batch_size,
+        pin_memory=hp.use_pinned_memory_train,
     )
 
     test_loader = DataLoader(
@@ -182,15 +192,15 @@ def load_split_data_all(train_data_transform, test_data_transform):
     test_dataset = SplitDataset(root, test_fake, test_real, test_data_transform)
 
     train_loader = DataLoader(
-        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
+        train_dataset,
+        shuffle=True,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.train_batch_size,
+        pin_memory=hp.use_pinned_memory_train,
     )
 
     test_loader = DataLoader(
-        test_dataset,
-        shuffle=False,
-        num_workers=hp.data_num_workers,
-        batch_size=hp.test_batch_size,
-        pin_memory=hp.use_pinned_memory_test,
+        test_dataset, num_workers=hp.data_num_workers, batch_size=hp.test_batch_size, pin_memory=hp.use_pinned_memory_test
     )
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}
@@ -220,15 +230,15 @@ def load_split_data(train_data_transform, test_data_transform):
     test_dataset = SplitDataset(root, total_test_fakes, total_test_reals, test_data_transform)
 
     train_loader = DataLoader(
-        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
+        train_dataset,
+        shuffle=True,
+        num_workers=hp.data_num_workers,
+        batch_size=hp.train_batch_size,
+        pin_memory=hp.use_pinned_memory_train,
     )
 
     test_loader = DataLoader(
-        test_dataset,
-        shuffle=False,
-        num_workers=hp.data_num_workers,
-        batch_size=hp.test_batch_size,
-        pin_memory=hp.use_pinned_memory_test,
+        test_dataset, num_workers=hp.data_num_workers, batch_size=hp.test_batch_size, pin_memory=hp.use_pinned_memory_test
     )
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}
@@ -330,14 +340,14 @@ class SplitDataset(torch.utils.data.Dataset):
                         imgs_this_group = sorted(glob(f"{ff}/*_{group}_*.png"))
                         gsize = len(imgs_this_group)
                         if gsize <= take_per_group:
-                            sample_list.extend(imgs_this_group)
+                            sample_list.extend(map(lambda k: (k, target), imgs_this_group))
                         else:
                             midpoint = gsize // 2
                             either_side = take_per_group // 2
                             lower_bound = max(0, midpoint - either_side)
                             upper_bound = min(gsize, midpoint + either_side)
-                            mid_5_imgs = imgs_this_group[lower_bound:upper_bound]
-                            sample_list.extend(mid_5_imgs)
+                            mid_imgs = imgs_this_group[lower_bound:upper_bound]
+                            sample_list.extend(map(lambda k: (k, target), mid_imgs))
                 else:
                     raise RuntimeError("Invalid mode")
         return sample_list
