@@ -93,25 +93,19 @@ def get_test_transform_albumentations(image_size, mean, std):
 def train_albumentations(image_size, mean, std):
     return Compose(
         [
-            OneOf(
-                [
-                    Compose([PadIfNeeded(50, 50, p=1), CenterCrop(30, 30, p=1)], p=0.5),
-                    Downscale(p=0.5),
-                ],
-                p=1,
-            ),
+            Downscale(p=0.25),
             Rotate(limit=8, p=0.4),
             HorizontalFlip(p=0.6),
-            JpegCompression(quality_lower=25, quality_upper=65, p=0.4),
+            JpegCompression(quality_lower=25, quality_upper=65, p=0.2),
             RandomBrightnessContrast(
                 brightness_limit=(0.9, 1.2), contrast_limit=(0.9, 1.2), p=0.4
             ),
             RGBShift(p=0.4),
             RandomGamma(p=0.4),
             HueSaturationValue(p=0.4),
-            ChannelShuffle(p=0.1),
-            OneOf([IAAAdditiveGaussianNoise(), GaussNoise()], p=0.4),
-            InvertImg(p=0.1),
+            ChannelShuffle(p=0.05),
+            OneOf([IAAAdditiveGaussianNoise(), GaussNoise()], p=0.1),
+            InvertImg(p=0.01),
             Resize(*image_size, interpolation=cv2.INTER_AREA),
             Normalize(mean=mean, std=std),
             ToTensorV2(),

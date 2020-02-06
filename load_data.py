@@ -23,10 +23,7 @@ def load_data_imagefolder(train_data_transform, test_data_transform):
     dataset_size = len(img_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
-        indices,
-        random_state=hp.seed,
-        test_size=hp.test_split_percent,
-        stratify=img_dataset.targets,
+        indices, random_state=hp.seed, test_size=hp.test_split_percent, stratify=img_dataset.targets
     )
 
     test_img_dataset = copy.deepcopy(img_dataset)
@@ -36,9 +33,7 @@ def load_data_imagefolder(train_data_transform, test_data_transform):
     test_dataset = Subset(test_img_dataset, test_indices)
 
     if hp.balanced_sampling:
-        weights = make_weights_for_balanced_classes(
-            img_dataset.targets, train_indices, len(img_dataset.classes)
-        )
+        weights = make_weights_for_balanced_classes(img_dataset.targets, train_indices, len(img_dataset.classes))
         weights = torch.DoubleTensor(weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     else:
@@ -76,19 +71,14 @@ def load_hdf_data(key):
     dataset_size = len(flo_dataset)
     indices = list(range(dataset_size))
     train_indices, test_indices = train_test_split(
-        indices,
-        random_state=hp.seed,
-        test_size=hp.test_split_percent,
-        stratify=flo_dataset.targets,
+        indices, random_state=hp.seed, test_size=hp.test_split_percent, stratify=flo_dataset.targets
     )
 
     train_dataset = Subset(flo_dataset, train_indices)
     test_dataset = Subset(flo_dataset, test_indices)
 
     if hp.balanced_sampling:
-        weights = make_weights_for_balanced_classes(
-            flo_dataset.targets, train_indices, len(flo_dataset.classes)
-        )
+        weights = make_weights_for_balanced_classes(flo_dataset.targets, train_indices, len(flo_dataset.classes))
         weights = torch.DoubleTensor(weights)
         sampler = torch.utils.data.sampler.WeightedRandomSampler(weights, len(weights))
     else:
@@ -122,35 +112,15 @@ def load_fwa_data(train_data_transform, test_data_transform):
     torch.manual_seed(hp.seed)
     random.seed(hp.seed)
 
-    train_dataset = FWADataset(
-        hp.real_folder_loc,
-        hp.fake_loc,
-        "train",
-        hp.seed,
-        hp.test_split_percent,
-        train_data_transform,
-    )
-    test_dataset = FWADataset(
-        hp.real_folder_loc,
-        hp.fake_loc,
-        "test",
-        hp.seed,
-        hp.test_split_percent,
-        test_data_transform,
-    )
+    train_dataset = FWADataset(hp.real_folder_loc, hp.fake_loc, "train", hp.seed, hp.test_split_percent, train_data_transform)
+    test_dataset = FWADataset(hp.real_folder_loc, hp.fake_loc, "test", hp.seed, hp.test_split_percent, test_data_transform)
 
     train_loader = DataLoader(
-        train_dataset,
-        num_workers=hp.data_num_workers,
-        batch_size=hp.train_batch_size,
-        pin_memory=hp.use_pinned_memory_train,
+        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
     )
 
     test_loader = DataLoader(
-        test_dataset,
-        num_workers=hp.data_num_workers,
-        batch_size=hp.test_batch_size,
-        pin_memory=hp.use_pinned_memory_test,
+        test_dataset, num_workers=hp.data_num_workers, batch_size=hp.test_batch_size, pin_memory=hp.use_pinned_memory_test
     )
 
     dataset_dict = {"train": train_dataset, "test": test_dataset}
@@ -172,10 +142,7 @@ def get_array_in_batch(arr, shuffle=False, seed=50, per=5000):
 
 def get_split_df(seed=50, per=5000):
     df = pd.read_csv(hp.split_csv)
-    df = df[
-        ((df.video_label == "FAKE") | (df.video_label == "REAL"))
-        & (df.audio_label == "REAL")
-    ]
+    df = df[((df.video_label == "FAKE") | (df.video_label == "REAL")) & (df.audio_label == "REAL")]
     dff = df[(df.video_label == "FAKE")]
     df_reals = df[(df.video_label == "REAL")].filename.to_list()
     div, reals = get_array_in_batch(df_reals, shuffle=True, seed=seed, per=per)
@@ -194,8 +161,9 @@ def get_split_df(seed=50, per=5000):
 
 def load_split_data_all(train_data_transform, test_data_transform):
     fakes, reals, removed = get_split_df(hp.split_seed, hp.per)
-    total_real = [subitem for item in reals for subitem in item]
+    # total_real = [subitem for item in reals for subitem in item]
     total_fake = [subitem for item in fakes for subitem in item]
+    total_real = list(torch.load("/home/teh_devs/deepfake/deepfake-detection/scripts/out_of_bounds_all.pkl"))
 
     random.seed(hp.seed)
     random.shuffle(total_real)
@@ -214,10 +182,7 @@ def load_split_data_all(train_data_transform, test_data_transform):
     test_dataset = SplitDataset(root, test_fake, test_real, test_data_transform)
 
     train_loader = DataLoader(
-        train_dataset,
-        num_workers=hp.data_num_workers,
-        batch_size=hp.train_batch_size,
-        pin_memory=hp.use_pinned_memory_train,
+        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
     )
 
     test_loader = DataLoader(
@@ -244,27 +209,18 @@ def load_split_data(train_data_transform, test_data_transform):
     def create_full_list(idxlist, total_real, total_fake):
         for ri, fi, fsi in idxlist:
             total_real.extend(reals[ri])
-            div, batched_fake = get_array_in_batch(
-                fakes[fi], hp.shuffle_fake, hp.shuffle_fake_seed, hp.per
-            )
+            div, batched_fake = get_array_in_batch(fakes[fi], hp.shuffle_fake, hp.shuffle_fake_seed, hp.per)
             total_fake.extend(batched_fake[fsi])
 
     create_full_list(hp.train_idx_list, total_train_reals, total_train_fakes)
     create_full_list(hp.test_idx_list, total_test_reals, total_test_fakes)
     print("Train")
-    train_dataset = SplitDataset(
-        root, total_train_fakes, total_train_reals, train_data_transform
-    )
+    train_dataset = SplitDataset(root, total_train_fakes, total_train_reals, train_data_transform)
     print("Test")
-    test_dataset = SplitDataset(
-        root, total_test_fakes, total_test_reals, test_data_transform
-    )
+    test_dataset = SplitDataset(root, total_test_fakes, total_test_reals, test_data_transform)
 
     train_loader = DataLoader(
-        train_dataset,
-        num_workers=hp.data_num_workers,
-        batch_size=hp.train_batch_size,
-        pin_memory=hp.use_pinned_memory_train,
+        train_dataset, num_workers=hp.data_num_workers, batch_size=hp.train_batch_size, pin_memory=hp.use_pinned_memory_train
     )
 
     test_loader = DataLoader(
@@ -330,17 +286,20 @@ class SplitDataset(torch.utils.data.Dataset):
         super(SplitDataset, self).__init__()
         self.transform = transform
         self.class_to_idx = {"fake": 0, "real": 1}
-        self.samples = self.make_dataset(root, reals, 1)
+        self.samples = self.make_dataset(root, reals, 1, "real")
         print("real", len(self.samples))
-        fake_samples = self.make_dataset(root, fakes, 0)
+        fake_samples = self.make_dataset(root, fakes, 0, "fake")
         print("fake", len(fake_samples))
         self.samples.extend(fake_samples)
 
     def __getitem__(self, index):
         sample = self.samples[index]
-        image = cv2.imread(sample[0])
+        try:
+            image = cv2.imread(sample[0])
 
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        except Exception:
+            print(sample)
         if self.transform:
             augmented = self.transform(image=image)
             image = augmented["image"]
@@ -349,16 +308,38 @@ class SplitDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.samples)
 
-    def make_dataset(self, root, folders, target):
+    def make_dataset(self, root, folders, target, mode):
         sample_list = []
         for f in folders:
             f = f.split(".")[0]
             ff = os.path.join(root, f)
             if os.path.isdir(ff):
                 images = os.listdir(ff)
-                for img in images:
-                    img_path = os.path.join(ff, img)
-                    sample_list.append((img_path, target))
+                if mode == "real":
+                    for img in images:
+                        img_path = os.path.join(ff, img)
+                        sample_list.append((img_path, target))
+                elif mode == "fake":
+                    groups = set()
+                    for img in images:
+                        groups.add(img.split("_")[-2])
+                    if not groups:
+                        continue
+                    take_per_group = math.floor(5 / len(groups))
+                    for group in groups:
+                        imgs_this_group = sorted(glob(f"{ff}/*_{group}_*.png"))
+                        gsize = len(imgs_this_group)
+                        if gsize <= take_per_group:
+                            sample_list.extend(imgs_this_group)
+                        else:
+                            midpoint = gsize // 2
+                            either_side = take_per_group // 2
+                            lower_bound = max(0, midpoint - either_side)
+                            upper_bound = min(gsize, midpoint + either_side)
+                            mid_5_imgs = imgs_this_group[lower_bound:upper_bound]
+                            sample_list.extend(mid_5_imgs)
+                else:
+                    raise RuntimeError("Invalid mode")
         return sample_list
 
 
@@ -452,9 +433,7 @@ class HDFDataset(torch.utils.data.Dataset):
 
         self.classes = ["fake", "real"]
         self.class_to_idx = {"fake": 0, "real": 1}
-        self.targets = [0 for _ in range(self.num_fake)] + [
-            1 for _ in range(self.num_real)
-        ]
+        self.targets = [0 for _ in range(self.num_fake)] + [1 for _ in range(self.num_real)]
 
     def __getitem__(self, index):
         if index >= self.num_fake:
