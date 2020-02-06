@@ -9,6 +9,7 @@ import albumentations as A
 from glob import glob
 from tqdm import tqdm
 
+
 def get_array_in_batch(arr, shuffle=False, seed=50, per=5000):
     if shuffle:
         random.seed(seed)
@@ -505,49 +506,52 @@ def compose_mask(mask):
     og_dim = mask.shape
     aug = A.Compose(
         [
-            A.Downscale(
-                scale_min=0.15,
-                scale_max=0.5,
-                interpolation=cv2.INTER_AREA,
-                always_apply=True,
+            A.OneOf(
+                [
+                    A.Compose(
+                        [
+                            A.Downscale(
+                                scale_min=0.15,
+                                scale_max=0.5,
+                                interpolation=cv2.INTER_AREA,
+                                p=1,
+                            ),
+                            A.Blur(blur_limit=(7, 15), always_apply=True, p=1),
+                        ],
+                        p=1,
+                    ),
+                    A.OneOf(
+                        [
+                            A.Blur(blur_limit=(7, 15), always_apply=True, p=1),
+                            A.MotionBlur(blur_limit=(7, 15), always_apply=True, p=1),
+                            A.MedianBlur(blur_limit=(7, 15), always_apply=True, p=1),
+                            A.GaussianBlur(blur_limit=(7, 15), always_apply=True, p=1),
+                        ],
+                        p=1,
+                    ),
+                ],
                 p=1,
             ),
-            A.RandomGamma(gamma_limit=(80, 90), p=1),
-            A.RandomBrightnessContrast(
-                brightness_limit=0.1, contrast_limit=0.1, always_apply=True, p=1
-            ),
+            A.RandomGamma(gamma_limit=(80, 90), p=0.7),
+            A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1, p=0.6),
             A.HueSaturationValue(
-                hue_shift_limit=2,
-                sat_shift_limit=10,
-                val_shift_limit=2,
-                always_apply=True,
-                p=1,
+                hue_shift_limit=3, sat_shift_limit=22, val_shift_limit=3, p=0.5
             ),
             A.OpticalDistortion(
                 distort_limit=(0, 0.6),
                 shift_limit=(0, 0.6),
                 interpolation=cv2.INTER_AREA,
-                always_apply=True,
-                p=1,
+                p=0.6,
             ),
             A.RGBShift(r_shift_limit=2, g_shift_limit=2, b_shift_limit=2, p=0.1),
             A.ElasticTransform(
                 alpha=2, sigma=10, alpha_affine=10, interpolation=cv2.INTER_AREA, p=0.01
             ),
-            A.OneOf(
-                [
-                    A.Blur(blur_limit=(7, 15), always_apply=True, p=1),
-                    A.MotionBlur(blur_limit=(7, 15), always_apply=True, p=1),
-                    A.MedianBlur(blur_limit=(7, 15), always_apply=True, p=1),
-                    A.GaussianBlur(blur_limit=(7, 15), always_apply=True, p=1),
-                ],
-                p=1,
-            ),
         ],
         p=1,
     )
     f = aug(image=mask)["image"]
-    f = cv2.resize(f, (og_dim[1], og_dim[0]), interpolation=cv2.INTER_AREA)
+    # f = cv2.resize(f, (og_dim[1], og_dim[0]), interpolation=cv2.INTER_AREA)
     return f
 
 
@@ -561,41 +565,38 @@ random.seed(42)
 # a = random.choice(reals[0])
 dest = "/home/teh_devs/deepfake/dataset/finale/"
 out_of_bounds = set()
-for a in tqdm(reals[3]):
-    a_folder = "/home/teh_devs/deepfake/dataset/revamp/" + a.split(".")[0]
-    imgs = glob(f"{a_folder}/*.png")
-    groups = set()
-    for img in imgs:
-        groups.add(img.split("_")[-2])
-    for group in groups:
-        imgs_this_group = sorted(glob(f"{a_folder}/*_{group}_*.png"))
-        gsize = len(imgs_this_group)
-        if gsize >= 10:
-            save_imgs = imgs_this_group[gsize // 2 - 2: gsize // 2 + 2]
-        elif gsize >= 5:
-            save_imgs = imgs_this_group[gsize // 2 - 1: gsize // 2 + 1]
-        else:
-            save_imgs = imgs_this_group
-        for si in save_imgs:
-            cimg = cv2.imread(si)
+for rreal in reals:
+    for a in tqdm(rreal):
+        vid_name = a.split(".")[0]
+        a_folder = "/home/teh_devs/deepfake/dataset/revamp/" + vid_name
+        imgs = glob(f"{a_folder}/*.png")
+        for img in imgs:
+            og_name = img.split("/")[-1]
+            filename = os.path.join(dest, og_name)
+            if os.path.isfile(filename):
+                continue
+            cimg = cv2.imread(img)
+
             og = None
             if cimg.shape[0] < 80 or cimg.shape[1] < 80:
                 og = cimg.shape
-                cimg = image_resize(cimg, height=120)
+                cimg = image_resize(cimg, height=140)
+
             try:
                 mask = get_aligned_mask(cimg.shape[0])
                 f = compose_mask(mask)
                 final = apply_mask_to_img(cimg, f)
+
                 if og:
                     final = cv2.resize(final, (og[1], og[0]))
-                og_name = si.split('/')[-1]
-                filename = os.path.join(dest, og_name)
+
                 cv2.imwrite(filename, final)
             except IndexError:
-                out_of_bounds.add(a)
+                out_of_bounds.add(vid_name)
             except Exception as e:
-                print("Couldn't process file ", si)
+                print("Couldn't process file ", img)
                 print(e)
 
 import torch
-torch.save(out_of_bounds, "out_of_bounds4.pkl")
+
+torch.save(out_of_bounds, "out_of_bound_all.pkl")
