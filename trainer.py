@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime
 from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data, load_split_data_all
-from models.sppnet import get_model
+from models.meso import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
     get_image_transform_no_crop_scale,
@@ -26,7 +26,8 @@ if not os.path.exists(hp.save_folder):
     os.mkdir(hp.save_folder)
 
 
-writer = SummaryWriter(os.path.join("runs", hp.model_name))
+now = datetime.now()
+writer = SummaryWriter(os.path.join("runs", hp.model_name, now.strftime("%d%b%I:%M%p")))
 device = torch.device("cuda:0")
 
 # sorted
@@ -205,7 +206,6 @@ def pre_run():
 
 
 def run():
-    now = datetime.now()
     print("-------------------------------------")
     print(f"Now running model: {hp.model_name}")
     print(now.strftime("%A, %d %B at %I:%M %p"))
@@ -224,7 +224,6 @@ def run():
     print(classes)
 
     model = model.to(device)
-    model = load_multi_gpu(model)
 
     weights = None
     if hp.use_class_weights:
