@@ -1,32 +1,34 @@
 """
-Ported to pytorch thanks to [tstandley](https://github.com/tstandley/Xception-PyTorch)
-
-@author: tstandley
-Adapted by cadene
-
-Creates an Xception Model as defined in:
-
-Francois Chollet
-Xception: Deep Learning with Depthwise Separable Convolutions
-https://arxiv.org/pdf/1610.02357.pdf
-
-
-REMEMBER to set your image size to 3x299x299 for both test and validation
-
-normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                                  std=[0.5, 0.5, 0.5])
-
-The resize parameter of the validation transform should be 333, and make sure to center crop at 299x299
+Xception wish all ReLU's replaced with Mish
 """
 import torch.nn as nn
+import torch
 import torch.nn.functional as F
 
 
 class SeparableConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1, bias=False):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=1,
+        stride=1,
+        padding=0,
+        dilation=1,
+        bias=False,
+    ):
         super(SeparableConv2d, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size, stride, padding, dilation, groups=in_channels, bias=bias)
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            in_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups=in_channels,
+            bias=bias,
+        )
         self.pointwise = nn.Conv2d(in_channels, out_channels, 1, 1, 0, 1, 1, bias=bias)
 
     def forward(self, x):
@@ -35,12 +37,31 @@ class SeparableConv2d(nn.Module):
         return x
 
 
+class Mish(nn.Module):
+    def __init__(self, inplace):
+        super().__init__()
+
+    def forward(self, x):
+        x = x * (torch.tanh(F.softplus(x)))
+        return x
+
+
 class Block(nn.Module):
-    def __init__(self, in_filters, out_filters, reps, strides=1, start_with_relu=True, grow_first=True):
+    def __init__(
+        self,
+        in_filters,
+        out_filters,
+        reps,
+        strides=1,
+        start_with_relu=True,
+        grow_first=True,
+    ):
         super(Block, self).__init__()
 
         if out_filters != in_filters or strides != 1:
-            self.skip = nn.Conv2d(in_filters, out_filters, 1, stride=strides, bias=False)
+            self.skip = nn.Conv2d(
+                in_filters, out_filters, 1, stride=strides, bias=False
+            )
             self.skipbn = nn.BatchNorm2d(out_filters)
         else:
             self.skip = None
@@ -49,25 +70,35 @@ class Block(nn.Module):
 
         filters = in_filters
         if grow_first:
-            rep.append(nn.ReLU(inplace=True))
-            rep.append(SeparableConv2d(in_filters, out_filters, 3, stride=1, padding=1, bias=False))
+            rep.append(Mish(inplace=True))
+            rep.append(
+                SeparableConv2d(
+                    in_filters, out_filters, 3, stride=1, padding=1, bias=False
+                )
+            )
             rep.append(nn.BatchNorm2d(out_filters))
             filters = out_filters
 
         for i in range(reps - 1):
-            rep.append(nn.ReLU(inplace=True))
-            rep.append(SeparableConv2d(filters, filters, 3, stride=1, padding=1, bias=False))
+            rep.append(Mish(inplace=True))
+            rep.append(
+                SeparableConv2d(filters, filters, 3, stride=1, padding=1, bias=False)
+            )
             rep.append(nn.BatchNorm2d(filters))
 
         if not grow_first:
-            rep.append(nn.ReLU(inplace=True))
-            rep.append(SeparableConv2d(in_filters, out_filters, 3, stride=1, padding=1, bias=False))
+            rep.append(Mish(inplace=True))
+            rep.append(
+                SeparableConv2d(
+                    in_filters, out_filters, 3, stride=1, padding=1, bias=False
+                )
+            )
             rep.append(nn.BatchNorm2d(out_filters))
 
         if not start_with_relu:
             rep = rep[1:]
         else:
-            rep[0] = nn.ReLU(inplace=False)
+            rep[0] = Mish(inplace=False)
 
         if strides != 1:
             rep.append(nn.MaxPool2d(3, strides, 1))
@@ -102,11 +133,11 @@ class Xception(nn.Module):
 
         self.conv1 = nn.Conv2d(num_channels, 32, 3, 2, 0, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
-        self.relu1 = nn.ReLU(inplace=True)
+        self.relu1 = Mish(inplace=True)
 
         self.conv2 = nn.Conv2d(32, 64, 3, bias=False)
         self.bn2 = nn.BatchNorm2d(64)
-        self.relu2 = nn.ReLU(inplace=True)
+        self.relu2 = Mish(inplace=True)
         # do relu here
 
         self.block1 = Block(64, 128, 2, 2, start_with_relu=False, grow_first=True)
@@ -127,7 +158,7 @@ class Xception(nn.Module):
 
         self.conv3 = SeparableConv2d(1024, 1536, 3, 1, 1)
         self.bn3 = nn.BatchNorm2d(1536)
-        self.relu3 = nn.ReLU(inplace=True)
+        self.relu3 = Mish(inplace=True)
 
         # do relu here
         self.conv4 = SeparableConv2d(1536, 2048, 3, 1, 1)
@@ -176,7 +207,7 @@ class Xception(nn.Module):
         return x
 
     def logits(self, features):
-        x = nn.ReLU(inplace=True)(features)
+        x = Mish(inplace=True)(features)
 
         x = F.adaptive_avg_pool2d(x, (1, 1))
         x = x.view(x.size(0), -1)
@@ -187,7 +218,7 @@ class Xception(nn.Module):
         x = self.features(input)
         x = self.logits(x)
         return x
-    
+
     def get_mean_std(self):
         return ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
 
@@ -198,3 +229,9 @@ class Xception(nn.Module):
 def get_model(num_classes=2, num_channels=3):
     model = Xception(num_classes=num_classes, num_channels=num_channels)
     return model
+
+
+if __name__ == "__main__":
+    model = get_model(2, 3)
+    for p in model.named_parameters():
+        print(p[0])
