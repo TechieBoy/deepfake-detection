@@ -27,7 +27,10 @@ if not os.path.exists(hp.save_folder):
 
 
 now = datetime.now()
-writer = SummaryWriter(os.path.join("runs", hp.model_name, now.strftime("%d%b%I:%M%p")))
+writer = None
+if not (hp.quick_run or hp.pre_run):
+    writer = SummaryWriter(os.path.join("runs", hp.model_name, now.strftime("%d%b%I:%M%p")))
+
 device = hp.device
 
 # sorted
@@ -52,7 +55,6 @@ def train_model(
     since = time.time()
 
     best_acc = 0.0
-    n_iter = 0
 
     for epoch in range(num_epochs):
         if hp.use_cos_anneal_restart:
@@ -70,16 +72,22 @@ def train_model(
 
         # Each epoch has a training and validation phase
         for phase in ["train", "test"]:
+            n_iter_this_phase = 0
             if phase == "train":
                 model.train()  # Set model to training mode
             else:
+                if hp.quick_run:
+                    break
                 model.eval()  # Set model to evaluate mode
 
             running_loss = 0.0
             running_corrects = 0
 
             for inputs, labels in tqdm(dataloaders[phase], ncols=0, mininterval=1):
-                n_iter += 1
+                if hp.quick_run and n_iter_this_phase >= 150:
+                    break
+                n_iter_this_phase += 1
+
                 non_blocking_transfer = (
                     True if phase == "train" and hp.use_pinned_memory_train else False
                 )
@@ -116,10 +124,11 @@ def train_model(
             dataset_size = len(datasets[phase])
             epoch_loss = running_loss / dataset_size
             epoch_acc = float(running_corrects) / dataset_size
-            writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
-            writer.add_scalar(f"Accuracy/{phase}", epoch_acc, epoch)
+            if not hp.quick_run:
+                writer.add_scalar(f"Loss/{phase}", epoch_loss, epoch)
+                writer.add_scalar(f"Accuracy/{phase}", epoch_acc, epoch)
 
-            print("{} Loss: {:.4f} Acc: {:.4f}".format(phase, epoch_loss, epoch_acc))
+            print("{} Loss: {:.8f} Acc: {:.8f}".format(phase, epoch_loss, epoch_acc))
 
             if phase == "test":
                 if hp.use_step_lr:
@@ -130,25 +139,27 @@ def train_model(
 
             if phase == "test" and epoch_acc > best_acc:
                 best_acc = epoch_acc
-            file_name = f"{hp.model_name}_{epoch+1}.pt"
-            torch.save(model.state_dict(), os.path.join(save_loc, file_name))
-
-        true_val = true_val.numpy()
-        predictions = predictions.numpy()
-        probabilites = probabilites.numpy()
-        print(classification_report(true_val, predictions, target_names=classes))
-        writer.add_pr_curve("pr_curve", true_val, probabilites, epoch)
-        print("Confusion Matrix")
-        print(confusion_matrix(true_val, predictions))
-        print()
-        print("RoC AUC:")
-        print(roc_auc_score(true_val, probabilites))
-        print()
-        probabilites = np.around(probabilites, decimals=1)
-        hist, _ = np.histogram(probabilites, bins=3)
-        print("# Predictions magnitude below 0.33", hist[0])
-        print("# Predictions magnitude 0.33 to 0.66", hist[1])
-        print("# Predictions magnitude above 0.66", hist[2])
+            if not hp.quick_run:
+                file_name = f"{hp.model_name}_{epoch+1}.pt"
+                torch.save(model.state_dict(), os.path.join(save_loc, file_name))
+        if not hp.quick_run:
+            true_val = true_val.numpy()
+            predictions = predictions.numpy()
+            probabilites = probabilites.numpy()
+            print(classification_report(true_val, predictions, target_names=classes))
+            
+            writer.add_pr_curve("pr_curve", true_val, probabilites, epoch)
+            print("Confusion Matrix")
+            print(confusion_matrix(true_val, predictions))
+            print()
+            print("RoC AUC:")
+            print(roc_auc_score(true_val, probabilites))
+            print()
+            probabilites = np.around(probabilites, decimals=1)
+            hist, _ = np.histogram(probabilites, bins=3)
+            print("# Predictions magnitude below 0.33", hist[0])
+            print("# Predictions magnitude 0.33 to 0.66", hist[1])
+            print("# Predictions magnitude above 0.66", hist[2])
 
     time_elapsed = time.time() - since
     print(
@@ -208,13 +219,13 @@ def run():
     print(f"Now running model: {hp.model_name}")
     print(now.strftime("%A, %d %B at %I:%M %p"))
     print("-------------------------------------")
+
     save_loc = hp.model_name + now.strftime("%d%b%I:%M%p")
     save_loc = os.path.join(hp.save_folder, save_loc)
-    if not os.path.isdir(save_loc):
-        os.mkdir(save_loc)
-
-    shutil.copy("hp.py", save_loc)
-    torch.save(hp, os.path.join(save_loc, hp.model_name + "-hp.pt"))
+    if not hp.quick_run:
+        if not os.path.isdir(save_loc):
+            os.mkdir(save_loc)
+        shutil.copy("hp.py", save_loc)
     model = hp.model
     datasets, dataloaders = load_data_for_model(model)
 
