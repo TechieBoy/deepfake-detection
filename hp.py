@@ -1,10 +1,12 @@
 from constants import ConstDict
-from models.efficientnet import get_model
+from models.resnext import get_model
+import warnings
+warnings.simplefilter("ignore", UserWarning)
 
 
 class HyperParams:
-    model_name = "mesonet_revamp_transforms"
-    pre_run = True
+    model_name = "resnext_revamp_transforms"
+    pre_run = False
     seed = 69
 
     model = get_model(2)

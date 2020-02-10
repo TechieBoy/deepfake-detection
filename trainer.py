@@ -10,7 +10,6 @@ from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data, load_split_data_all
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
-    get_image_transform_no_crop_scale,
     get_test_transform,
     train_albumentations,
     get_test_transform_albumentations,
@@ -223,6 +222,7 @@ def run():
     print(classes)
 
     model = model.to(device)
+    model = load_multi_gpu(model)
 
     weights = None
     if hp.use_class_weights:
