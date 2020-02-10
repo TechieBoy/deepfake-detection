@@ -1,10 +1,13 @@
 from constants import ConstDict
+from models.efficientnet import get_model
 
 
 class HyperParams:
-    model_name = "efficient_revamp_weighted_with_transform"
-    save_folder = "saved_models"
-    seed = 420
+    model_name = "mesonet_revamp_transforms"
+    pre_run = True
+    seed = 69
+
+    model = get_model(2)
 
     # Data
 
@@ -14,7 +17,7 @@ class HyperParams:
 
     # Splits
     using_split = True
-    split_csv = "/home/bcd/deepfake/dataset/fake-real-distinct.csv"
+    split_csv = "/home/teh_devs/deepfake/dataset/fake-real-distinct.csv"
     per = 5000
     train_idx_list = [(0, 0, 0)]
     test_idx_list = [(1, 1, 0)]
@@ -29,19 +32,19 @@ class HyperParams:
 
     # FWA data
     using_fwa = False
-    real_folder_loc = "/raid/deepfake/revamp"
-    fake_loc = "/raid/deepfake/finale"
+    real_folder_loc = "/home/teh_devs/deepfake/dataset/revamp"
+    fake_loc = "/home/teh_devs/deepfake/dataset/finale"
 
     # Common data
     use_pinned_memory_train = True
     use_pinned_memory_test = True
-    test_batch_size =  256
-    train_batch_size = 256
-    data_num_workers = 24
+    test_batch_size = 512
+    train_batch_size = 512
+    data_num_workers = 30
     test_split_percent = 0.1
 
     # Train
-    num_epochs = 32
+    num_epochs = 56
 
     # Optimizer
     use_adamW = False
@@ -49,16 +52,16 @@ class HyperParams:
 
     use_sgd = True
     sgd_params = dict(
-        lr=1e-3, momentum=0.9, dampening=0, weight_decay=0.01, nesterov=True
+        lr=1e-2, momentum=0.99, dampening=0, weight_decay=0.01, nesterov=True
     )
 
     # Criterion
-    use_class_weights = True
-    class_weights = [1.1, 1]
+    use_class_weights = False
+    class_weights = [1.3, 1]
 
     # Scheduler
     use_step_lr = False
-    step_sched_params = {"step_size": 2, "gamma": 0.95, "last_epoch": -1}
+    step_sched_params = {"step_size": 4, "gamma": 0.95, "last_epoch": -1}
 
     use_plateau_lr = False
     plateau_lr_sched_params = {
@@ -75,7 +78,7 @@ class HyperParams:
 
     use_one_cycle_lr = True
     oc_sched_params = {
-        "max_lr": 1e-3,
+        "max_lr": 1e-2,
         "div_factor": 10.0,  # initial_lr = max_lr/div_factor
         "final_div_factor": 1000.0,  # min_lr = initial_lr/final_div_factor
         "epochs": num_epochs,
@@ -91,6 +94,8 @@ class HyperParams:
         "eta_min": 0.0017,  # Minimum Learning rate
         "last_epoch": -1,
     }
+
+    save_folder = "saved_models"
 
 
 hp = ConstDict(

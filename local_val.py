@@ -204,7 +204,7 @@ def eval_model(device, class_mapping, model, faces, data_transform):
     probabilites = np.around(probs, decimals=1)
     gt_indices = probs > 0.5
     gt_vals = probs[gt_indices]
-    return gt_indices.sum() / len(probs), gt_vals, probs.mean()
+    return gt_indices.sum() / len(probs), gt_vals, gmean(probs)
 
 
 def get_evenly_spaced_frames(cap, num_frames):
@@ -230,14 +230,14 @@ spp.to(device)
 # spp = torch.nn.DataParallel(spp)
 spp.load_state_dict(
     torch.load(
-        "/home/teh_devs/deepfake/deepfake-detection/saved_models/pretrained_spp_no_transform05Feb07:38PM/pretrained_spp_no_transform_56.pt"
+        "/home/teh_devs/deepfake/deepfake-detection/saved_models/finetuning_pretrained_spp_with_transform06Feb10:19PM/finetuning_pretrained_spp_with_transform_50.pt"
     )
 )
 spp.eval()
 detector = MTCNN(device=device, keep_all=True, select_largest=False, post_process=False)
 
 df = pd.read_csv("~/deepfake/raw/combined_metadata.csv")
-fakes = df[df.label == "FAKE"][["index", "folder"]]
+fakes = df[df.label == "REAL"][["index", "folder"]]
 fakes["path"] = fakes["folder"] + "/" + fakes["index"]
 fake_list = fakes["path"].tolist()
 random.seed(12)
@@ -251,8 +251,8 @@ from tqdm import tqdm
 logloss = 0
 count = 0
 fakes = set()
-iterator = tqdm(files, ncols=0)
-for fil in iterator:
+# iterator = tqdm(files, ncols=0)
+for fil in files:
     try:
         s = time()
         video_name = fil.split("/")[-1]
@@ -270,12 +270,17 @@ for fil in iterator:
             percent, gt_val, tot_mean = eval_model(
                 device, class_mapping, spp, faces_from_frames, data_transform_spp
             )
-            if tot_mean < 0.5:
-                count += 1
-                # iterator.write(video_name)
-                # iterator.write(tot_mean)
-                fakes.add(video_name)
-            # display(random.choice(faces_from_frames))
+            display(random.choice(faces_from_frames))
+            print(percent)
+            print(gt_val)
+            print(tot_mean)
+            print()
+            # if tot_mean < 0.5:
+            #     count += 1
+            #     # iterator.write(video_name)
+            #     # iterator.write(tot_mean)
+            #     fakes.add(video_name)
+            # # display(random.choice(faces_from_frames))
 
             if percent is None:
                 print("Not a single frame found, SHAME")

@@ -19,8 +19,6 @@ from albumentations import (
 from albumentations.pytorch import ToTensorV2
 from torchvision import transforms
 import cv2
-import numpy as np
-from hp import hp
 
 
 def get_test_transform(image_size, mean, std):

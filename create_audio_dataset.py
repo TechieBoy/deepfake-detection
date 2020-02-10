@@ -83,3 +83,10 @@ with h5py.File("audio.hdf5", "w") as hdfile:
     tstd /= total
     hdfile["mean"][...] = tmean
     hdfile["std"][...] = tstd
+
+# import subprocess
+# for dirr, audio_list in [('fake', fake_audio), ('real', real_audio)]:
+#     for audio in tqdm(sorted(audio_list), ncols=0):
+#         file_name = audio.split('/')[-1].split('.')[0]
+#         command = f"ffmpeg -i '{audio}' -vn -acodec pcm_f32le -ac 1 -ar 44100 '{dirr}/{file_name}.wav'"
+#         subprocess.call(command, shell=True)

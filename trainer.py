@@ -8,7 +8,6 @@ import shutil
 from datetime import datetime
 from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data, load_split_data_all
-from models.efficientnet import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
     get_image_transform_no_crop_scale,
@@ -21,6 +20,8 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from hp import hp
 
+# Disable if input sizes vary a lot
+torch.backends.cudnn.benchmark = True
 
 if not os.path.exists(hp.save_folder):
     os.mkdir(hp.save_folder)
@@ -187,7 +188,7 @@ def pre_run():
     print("-------------------------------------")
     print(f"Now Pre-running model: {hp.model_name}")
     print("-------------------------------------")
-    model = get_model(2)
+    model = hp.model
     datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
     model = load_multi_gpu(model)
@@ -215,7 +216,7 @@ def run():
 
     shutil.copy("hp.py", save_loc)
     torch.save(hp, os.path.join(save_loc, hp.model_name + "-hp.pt"))
-    model = get_model(2)
+    model = hp.model
     datasets, dataloaders = load_data_for_model(model)
 
     print("Classes array (check order)")
@@ -317,5 +318,8 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
 
 
 if __name__ == "__main__":
-    run()
+    if hp.pre_run:
+        pre_run()
+    else:
+        run()
     writer.close()
