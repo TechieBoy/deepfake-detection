@@ -83,8 +83,6 @@ def train_model(
                 non_blocking_transfer = (
                     True if phase == "train" and hp.use_pinned_memory_train else False
                 )
-                if phase == "train" and hp.using_augments:
-                    inputs = inputs["image"]
                 inputs = inputs.to(device, non_blocking=non_blocking_transfer)
                 labels = labels.to(device, non_blocking=non_blocking_transfer)
 
@@ -285,8 +283,6 @@ def find_lr(net, criterion, trn_loader, init_value=1e-8, final_value=10.0, beta=
     log_lrs = []
     for inputs, labels in tqdm(trn_loader, ncols=0, mininterval=1):
         batch_num += 1
-        if hp.using_augments:
-            inputs = inputs["image"]
         inputs = inputs.to(device, non_blocking=hp.use_pinned_memory_train)
         labels = labels.to(device, non_blocking=hp.use_pinned_memory_train)
 
