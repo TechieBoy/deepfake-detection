@@ -171,9 +171,9 @@ def get_split_df(seed=50, per=5000):
 
 def load_split_data_all(train_data_transform, test_data_transform):
     fakes, reals, removed = get_split_df(hp.split_seed, hp.per)
-    # total_real = [subitem for item in reals for subitem in item]
+    total_real = [subitem for item in reals for subitem in item]
     total_fake = [subitem for item in fakes for subitem in item]
-    total_real = list(torch.load("/home/teh_devs/deepfake/deepfake-detection/scripts/out_of_bounds_all.pkl"))
+    # total_real = list(torch.load("/home/teh_devs/deepfake/deepfake-detection/scripts/out_of_bounds_all.pkl"))
 
     random.seed(hp.seed)
     random.shuffle(total_real)
@@ -335,7 +335,7 @@ class SplitDataset(torch.utils.data.Dataset):
                         groups.add(img.split("_")[-2])
                     if not groups:
                         continue
-                    take_per_group = math.floor(5 / len(groups))
+                    take_per_group = math.ceil(6 / len(groups))
                     for group in groups:
                         imgs_this_group = sorted(glob(f"{ff}/*_{group}_*.png"))
                         gsize = len(imgs_this_group)

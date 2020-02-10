@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime
 from tqdm import tqdm
 from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data, load_split_data_all
-from models.meso import get_model
+from models.efficientnet import get_model
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
     get_image_transform_no_crop_scale,
@@ -36,11 +36,11 @@ classes = ["fake", "real"]
 
 def load_multi_gpu(model):
     model.to(device)
-    if torch.cuda.device_count() > 1:
+    if False or torch.cuda.device_count() > 1:
         print("Using", torch.cuda.device_count(), "GPUs!")
         # torch.distributed.init_process_group(backend="nccl")
         # model = nn.parallel.DistributedDataParallel(model)
-        model = nn.DataParallel(model)
+        model = nn.DataParallel(model, [2,3])
     else:
         print(r"Multiple GPU's not available (╯°□°）╯︵ ┻━┻")
     return model
@@ -126,9 +126,9 @@ def train_model(
             if phase == "test":
                 if hp.use_step_lr:
                     scheduler.step()
-            elif hp.use_plateau_lr:
-                # Passing in training loss!
-                scheduler.step(epoch_loss)
+                elif hp.use_plateau_lr:
+                    # Passing in test loss!
+                    scheduler.step(epoch_loss)
 
             if phase == "test" and epoch_acc > best_acc:
                 best_acc = epoch_acc
@@ -192,7 +192,7 @@ def pre_run():
     model = get_model(2)
     datasets, dataloaders = load_data_for_model(model)
     model = model.to(device)
-
+    model = load_multi_gpu(model)
     weights = None
     if hp.use_class_weights:
         weights = torch.FloatTensor(hp.class_weights).to(device)
