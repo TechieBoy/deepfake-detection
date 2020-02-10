@@ -28,7 +28,7 @@ if not os.path.exists(hp.save_folder):
 
 now = datetime.now()
 writer = SummaryWriter(os.path.join("runs", hp.model_name, now.strftime("%d%b%I:%M%p")))
-device = torch.device("cuda:0")
+device = hp.device
 
 # sorted
 classes = ["fake", "real"]
@@ -40,7 +40,7 @@ def load_multi_gpu(model):
         print("Using", torch.cuda.device_count(), "GPUs!")
         # torch.distributed.init_process_group(backend="nccl")
         # model = nn.parallel.DistributedDataParallel(model)
-        model = nn.DataParallel(model, [2,3])
+        model = nn.DataParallel(model, hp.device_ids)
     else:
         print(r"Multiple GPU's not available (╯°□°）╯︵ ┻━┻")
     return model
@@ -177,7 +177,7 @@ def load_data_for_model(model):
         return load_fwa_data(train_data_transform, test_data_transform)
     else:
         test_transform = get_test_transform(image_size, mean, std)
-        data_transform = get_image_transform_no_crop_scale(image_size, mean, std)
+        data_transform = get_test_transform(image_size, mean, std)
         return load_data_imagefolder(
             train_data_transform=data_transform, test_data_transform=test_transform
         )

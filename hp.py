@@ -1,6 +1,8 @@
 from constants import ConstDict
 from models.resnext import get_model
+import torch
 import warnings
+
 warnings.simplefilter("ignore", UserWarning)
 
 
@@ -9,7 +11,10 @@ class HyperParams:
     pre_run = False
     seed = 69
 
+    # Model and GPU
     model = get_model(2)
+    device = torch.device("cuda:0")
+    device_ids = [0, 1, 2, 3]
 
     # Data
 
