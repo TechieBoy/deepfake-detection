@@ -203,11 +203,11 @@ def get_split_df(seed=50, per=5000):
     return fakes, reals, removed
 
 
-def get_good_val_split(num_vids_test, seed):
+def get_cluster_val_split(num_vids_test, seed):
     of, off = load_pandas_dataset_no_audio_fakes()
 
     # Read clusters from https://www.kaggle.com/hmendonca/proper-clustering-with-facenet-embeddings-eda
-    df = pd.read_feather("face_clusters.feather")
+    df = pd.read_feather(hp.cluster_feather)
 
     # Get all clusters with less than 70 videos (Higher value clusters tend to have too much noise)
     val_counts = df.cluster.value_counts()
@@ -230,12 +230,11 @@ def get_good_val_split(num_vids_test, seed):
     # Find corresponding fakes
     test_fakes = []
     grouped = off.groupby(off.original)
-    missed = 0
     for r in test_reals:
         try:
             test_fakes.extend(grouped.get_group(r).filename.to_list())
         except KeyError:
-            missed += 1
+            pass
 
     # All other videos are for training
     all_reals = of.filename.to_list()
@@ -248,8 +247,8 @@ def get_good_val_split(num_vids_test, seed):
     return train_reals, train_fakes, test_reals, test_fakes
 
 
-def load_split_data_all(train_data_transform, test_data_transform):
-    fakes, reals, removed = get_split_df(hp.split_seed, hp.per)
+def load_split_data_random(train_data_transform, test_data_transform):
+    fakes, reals, removed = get_split_df(hp.split_seed, 15000)
     total_real = [subitem for item in reals for subitem in item]
     total_fake = [subitem for item in fakes for subitem in item]
     # total_real = list(torch.load("/home/teh_devs/deepfake/deepfake-detection/scripts/out_of_bounds_all.pkl"))
@@ -291,30 +290,15 @@ def load_split_data_all(train_data_transform, test_data_transform):
 
 
 def load_split_data(train_data_transform, test_data_transform):
+    train_reals, train_fakes, test_reals, test_fakes = get_cluster_val_split(hp.num_test_real_vids, hp.split_seed)
     root = hp.data_dir
-    fakes, reals, removed = get_split_df(hp.split_seed, hp.per)
-    total_train_reals = []
-    total_train_fakes = []
-    total_test_reals = []
-    total_test_fakes = []
-
-    def create_full_list(idxlist, total_real, total_fake):
-        for ri, fi, fsi in idxlist:
-            total_real.extend(reals[ri])
-            div, batched_fake = get_array_in_batch(
-                fakes[fi], hp.shuffle_fake, hp.shuffle_fake_seed, hp.per
-            )
-            total_fake.extend(batched_fake[fsi])
-
-    create_full_list(hp.train_idx_list, total_train_reals, total_train_fakes)
-    create_full_list(hp.test_idx_list, total_test_reals, total_test_fakes)
     print("Train")
     train_dataset = SplitDataset(
-        root, total_train_fakes, total_train_reals, train_data_transform
+        root, train_fakes, train_reals, train_data_transform
     )
     print("Test")
     test_dataset = SplitDataset(
-        root, total_test_fakes, total_test_reals, test_data_transform
+        root, test_fakes, test_reals, test_data_transform
     )
 
     train_loader = DataLoader(

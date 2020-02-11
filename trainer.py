@@ -7,7 +7,7 @@ import os
 import shutil
 from datetime import datetime
 from tqdm import tqdm
-from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data, load_split_data_all
+from load_data import load_data_imagefolder, load_hdf_data, load_split_data, load_fwa_data, load_split_data_random
 from sklearn.metrics import confusion_matrix, roc_auc_score, classification_report
 from transforms import (
     get_test_transform,
@@ -147,7 +147,6 @@ def train_model(
             predictions = predictions.numpy()
             probabilites = probabilites.numpy()
             print(classification_report(true_val, predictions, target_names=classes))
-            
             writer.add_pr_curve("pr_curve", true_val, probabilites, epoch)
             print("Confusion Matrix")
             print(confusion_matrix(true_val, predictions))
@@ -176,15 +175,15 @@ def train_model(
 def load_data_for_model(model):
     image_size = model.get_image_size()
     mean, std = model.get_mean_std()
+    train_data_transform = train_albumentations(image_size, mean, std)
+    test_data_transform = get_test_transform_albumentations(image_size, mean, std)
     if hp.using_hdf:
         return load_hdf_data(hp.hdf_key)
-    elif hp.using_split:
-        train_data_transform = train_albumentations(image_size, mean, std)
-        test_data_transform = get_test_transform_albumentations(image_size, mean, std)
-        return load_split_data_all(train_data_transform, test_data_transform)
+    elif hp.using_split_random:
+        return load_split_data_random(train_data_transform, test_data_transform)
+    elif hp.using_split_cluster:
+        return load_split_data(train_data_transform, test_data_transform)
     elif hp.using_fwa:
-        train_data_transform = train_albumentations(image_size, mean, std)
-        test_data_transform = get_test_transform_albumentations(image_size, mean, std)
         return load_fwa_data(train_data_transform, test_data_transform)
     else:
         test_transform = get_test_transform(image_size, mean, std)

@@ -9,6 +9,7 @@ warnings.simplefilter("ignore", UserWarning)
 class HyperParams:
     model_name = "resnext_revamp_transforms"
     pre_run = False
+    quick_run = False
     seed = 69
 
     # Model and GPU
@@ -23,14 +24,12 @@ class HyperParams:
     hdf_key = "audio"
 
     # Splits
-    using_split = True
+    using_split_random = True
+    using_split_cluster = True
     split_csv = "/home/teh_devs/deepfake/dataset/fake-real-distinct.csv"
-    per = 5000
-    train_idx_list = [(0, 0, 0)]
-    test_idx_list = [(1, 1, 0)]
+    cluster_feather = "/home/teh_devs/deepfake/dataset/face_clusters.feather"
+    num_test_real_vids = 500
     split_seed = 50
-    shuffle_fake = False
-    shuffle_fake_seed = 50
 
     # Default
     data_dir = "/raid/deepfake/revamp"
