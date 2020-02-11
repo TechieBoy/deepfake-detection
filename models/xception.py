@@ -180,7 +180,7 @@ class Xception(nn.Module):
 
         x = F.adaptive_avg_pool2d(x, (1, 1))
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        x = self.last_linear(x)
         return x
 
     def forward(self, input):
@@ -197,4 +197,6 @@ class Xception(nn.Module):
 
 def get_model(num_classes=2, num_channels=3):
     model = Xception(num_classes=num_classes, num_channels=num_channels)
+    model.last_linear = model.fc
+    del model.fc
     return model
